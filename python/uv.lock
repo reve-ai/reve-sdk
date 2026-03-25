@@ -519,29 +519,43 @@ wheels = [
 
 [[package]]
 name = "reve"
-version = "0.1.1"
+version = "0.1.2"
 source = { editable = "." }
 dependencies = [
-    { name = "pillow" },
-    { name = "pydantic" },
     { name = "requests" },
 ]
 
 [package.optional-dependencies]
+all = [
+    { name = "pillow" },
+    { name = "pydantic" },
+]
 dev = [
+    { name = "pillow" },
+    { name = "pydantic" },
     { name = "pytest" },
     { name = "responses" },
+]
+pil = [
+    { name = "pillow" },
+]
+pydantic = [
+    { name = "pydantic" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "pillow", specifier = ">=12.1.1" },
-    { name = "pydantic", specifier = ">=2.9.1" },
+    { name = "pillow", marker = "extra == 'all'", specifier = ">=12.1.1" },
+    { name = "pillow", marker = "extra == 'dev'", specifier = ">=12.1.1" },
+    { name = "pillow", marker = "extra == 'pil'", specifier = ">=12.1.1" },
+    { name = "pydantic", marker = "extra == 'all'", specifier = ">=2.9.1" },
+    { name = "pydantic", marker = "extra == 'dev'", specifier = ">=2.9.1" },
+    { name = "pydantic", marker = "extra == 'pydantic'", specifier = ">=2.9.1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
     { name = "requests", specifier = ">=2.32.4" },
     { name = "responses", marker = "extra == 'dev'", specifier = ">=0.20.0" },
 ]
-provides-extras = ["dev"]
+provides-extras = ["pil", "pydantic", "all", "dev"]
 
 [[package]]
 name = "tomli"

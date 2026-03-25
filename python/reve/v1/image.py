@@ -9,14 +9,20 @@ import io
 from collections.abc import Sequence
 from typing import Any
 
-from PIL import Image
-
 from .._client import ReveClient
 from .._response import ImageResponse
 from ..exceptions import ReveContentViolationError
 
+try:
+    from PIL import Image as _PILImage
+
+    _HAS_PIL = True
+except ImportError:  # pragma: no cover
+    _HAS_PIL = False
+
 #: Types accepted as image inputs for remix/edit.
-ImageInput = str | bytes | Image.Image
+#: When Pillow is available this also includes PIL.Image.Image.
+ImageInput = str | bytes | Any
 
 
 def encode_image(img: ImageInput) -> str:
@@ -36,7 +42,7 @@ def encode_image(img: ImageInput) -> str:
             data = f.read()
     elif isinstance(img, bytes):
         data = img
-    elif isinstance(img, Image.Image):
+    elif _HAS_PIL and isinstance(img, _PILImage.Image):
         buf = io.BytesIO()
         img.save(buf, format="PNG")
         data = buf.getvalue()

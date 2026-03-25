@@ -53,7 +53,7 @@ img = remix(
 )
 ```
 
-Reference images accept file paths (str), raw bytes, or PIL Images.
+Reference images accept file paths (str), raw bytes, or PIL Images (when Pillow is installed).
 Use `<ref>0</ref>`, `<ref>1</ref>`, etc. in the prompt to refer to each image.
 
 ### Edit an existing image
@@ -106,13 +106,14 @@ img = create(
 
 `create()`, `remix()`, and `edit()` return an `ImageResponse` with:
 
-- `image` — `PIL.Image.Image`
+- `image` — `PIL.Image.Image` when Pillow is installed, otherwise `None`
+- `image_bytes` — `bytes` (raw image data, always populated)
 - `request_id` — `str | None`
 - `credits_used` — `int | None`
 - `credits_remaining` — `int | None`
 - `version` — `str | None`
 - `content_violation` — `bool`
-- `save(*args, **kwargs)` — delegates to `PIL.Image.save()`
+- `save(path, **kwargs)` — delegates to `PIL.Image.save()` when Pillow is available, otherwise writes raw bytes
 
 ## Error Handling
 

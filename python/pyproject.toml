@@ -4,21 +4,31 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "reve"
-version = "0.1.1"
+version = "0.1.2"
 description = "Python SDK for the Reve image generation API"
 readme = "README.md"
 license = "CC-BY-4.0"
 requires-python = ">=3.10"
 dependencies = [
     "requests>=2.32.4",
-    "Pillow>=12.1.1",
-    "pydantic>=2.9.1",
 ]
 
 [project.optional-dependencies]
+pil = [
+    "Pillow>=12.1.1",
+]
+pydantic = [
+    "pydantic>=2.9.1",
+]
+all = [
+    "Pillow>=12.1.1",
+    "pydantic>=2.9.1",
+]
 dev = [
     "pytest>=7.0.0",
     "responses>=0.20.0",
+    "Pillow>=12.1.1",
+    "pydantic>=2.9.1",
 ]
 
 [tool.setuptools.packages.find]

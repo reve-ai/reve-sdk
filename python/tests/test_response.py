@@ -2,10 +2,17 @@
 
 import io
 
+import pytest
 from PIL import Image
-from pydantic import BaseModel
 
 from reve import ImageResponse
+
+try:
+    import pydantic  # noqa: PLC0415
+
+    _HAS_PYDANTIC = True
+except ImportError:
+    _HAS_PYDANTIC = False
 
 _CREDITS_USED = 5
 _CREDITS_REMAINING = 95
@@ -34,6 +41,7 @@ def test_image_response_basic():
         },
     )
     assert resp.image.size == (200, 150)
+    assert resp.image_bytes == data
     assert resp.request_id == "req-123"
     assert resp.credits_used == _CREDITS_USED
     assert resp.credits_remaining == _CREDITS_REMAINING
@@ -75,8 +83,9 @@ def test_image_response_save(tmp_path):
     assert saved.size == (50, 50)
 
 
+@pytest.mark.skipif(not _HAS_PYDANTIC, reason="pydantic not installed")
 def test_image_response_is_pydantic_model():
-    assert issubclass(ImageResponse, BaseModel)
+    assert issubclass(ImageResponse, pydantic.BaseModel)
 
 
 def test_image_response_coerces_string_credits():
