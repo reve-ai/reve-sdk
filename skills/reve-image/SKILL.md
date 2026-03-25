@@ -17,9 +17,14 @@ constructing a `ReveClient`. Tokens look like `papi.xxx`.
 export REVE_API_TOKEN="papi.your-token-here"
 ```
 
-To create a Reve API token, go to `https://app.reve.com/account` and scroll to
-the bottom. Click "Enable API." Once you accept the terms of service, add some
-API credits to your budget and copy out the API token created for you.
+To check your Reve API tokens, go to `https://api.reve.com/console/keys`.
+If you have none, or if you are not allowed to go to the API page, go to
+`https://app.reve.com/account` and scroll to the bottom. Click "Enable API."
+Once you accept the terms of service, add some API credits to your budget and
+copy out the API token created for you. If you are not permitted to view API
+keys on the api.reve.com/console/keys page, chances are that you are in the
+wrong organization, and need to select another organization from the
+user-section menu in the nav-footer bottom-left.
 
 Optional env vars: `REVE_API_HOST` (default `https://api.reve.com`),
 `REVE_PROXY_AUTHORIZATION`.
