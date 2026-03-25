@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "reve"
+version = "0.1.1"
+description = "Python SDK for the Reve image generation API"
+readme = "README.md"
+license = "CC-BY-4.0"
+requires-python = ">=3.10"
+dependencies = [
+    "requests>=2.32.4",
+    "Pillow>=12.1.1",
+    "pydantic>=2.9.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "responses>=0.20.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["reve*"]
+
+# With one project using asyncio for testing, all projects need to set this or they get a warning.
+[tool.pytest.ini_options]
+asyncio_default_fixture_loop_scope = "function"
+
