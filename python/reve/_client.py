@@ -2,10 +2,12 @@
 
 import http
 import os
+import platform
 from typing import Any
 
 import requests as _requests
 
+from ._version import get_version
 from .exceptions import (
     ReveAPIError,
     ReveAuthenticationError,
@@ -15,6 +17,9 @@ from .exceptions import (
 )
 
 _DEFAULT_API_URL = "https://api.reve.com"
+
+#: User-Agent sent on every request, resolved once on import.
+_USER_AGENT = "reve-sdk/{} python/{}".format(get_version(), platform.python_version())
 
 
 class ReveClient:
@@ -60,7 +65,7 @@ class ReveClient:
         Returns:
             dict of HTTP headers.
         """
-        headers: dict[str, str] = {"Accept": accept}
+        headers: dict[str, str] = {"Accept": accept, "User-Agent": _USER_AGENT}
         if self.api_token:
             headers["Authorization"] = "Bearer {}".format(self.api_token)
         if self.proxy_authorization:
@@ -130,7 +135,7 @@ class ReveClient:
         """Send a POST request to the Reve API.
 
         Args:
-            path: API path (e.g. ``"/v1/image/create/"``).
+            path: API path (e.g. ``"/v1/image/create"``).
             data: JSON-serializable request body.
             accept: Accept header value. Use ``"image/jpeg"`` for image
                 endpoints.
@@ -165,7 +170,7 @@ class ReveClient:
         """Send a GET request to the Reve API.
 
         Args:
-            path: API path (e.g. ``"/v1/image/balance/"``).
+            path: API path (e.g. ``"/v1/image/balance"``).
             params: Optional query parameters dict.
 
         Returns:

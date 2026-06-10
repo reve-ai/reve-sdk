@@ -163,6 +163,81 @@ for e in effects:
 
 Returns a list of dicts with `name`, `description`, `source`, and `category` keys.
 
+## v2 Layout-Aware API
+
+The `reve.v2` module targets the `/v2/image/create` and `/v2/image/edit`
+endpoints. Instead of embedding image references in free text, a v2 request
+carries a structured `Description` (a layout of labelled, bounded regions) and
+a list of `Reference` images. The response can also echo the layout the model
+actually generated.
+
+```python
+from reve.v2 import create, Bbox, Description, ImageInput, Reference, Region
+
+result = create(
+    instruction="A dog on the left and a cat on the right",
+    description=Description(
+        prompt="two pets",
+        regions=[
+            Region(label="dog", prompt="a happy dog", bbox=Bbox(0.0, 0.0, 0.5, 1.0)),
+            Region(label="cat", prompt="a sleepy cat", bbox=Bbox(0.5, 0.0, 1.0, 1.0)),
+        ],
+    ),
+    references=[Reference(image=ImageInput(ref="reference:@mypet"), prompt="my pet")],
+    aspect_ratio="16:9",
+)
+result.save("pets.png")
+print(result.description)  # the layout the model generated
+```
+
+```python
+from reve.v2 import edit, Bbox, Description, Region
+
+result = edit(
+    instruction="Make the sky stormy",
+    image="original.jpg",  # path, bytes, PIL Image, or ImageInput
+    new_description=Description(
+        regions=[Region(label="sky", prompt="dark storm clouds", bbox=Bbox(0, 0, 1, 0.5))],
+    ),
+)
+```
+
+### Input types (`reve.v2`)
+
+| Type          | Fields                                                                                     |
+| ------------- | ------------------------------------------------------------------------------------------ |
+| `ImageInput`  | `data` (path/bytes/PIL, base-64 in JSON) **or** `ref` (`id:<uuid>` / `reference:@<name>`). |
+| `Bbox`        | `x0`, `y0`, `x1`, `y1` — normalized to `[0, 1]`, top-left origin.                          |
+| `Region`      | `label`, `prompt`, `bbox`, `preserve?`, `image_index?`, `image_region_index?`.             |
+| `Description` | `regions: list[Region]`, `prompt?`.                                                        |
+| `Reference`   | `image: ImageInput`, `prompt?`.                                                            |
+
+The `ref` form of `ImageInput` points at an image that already exists in the
+project your API key belongs to:
+
+- `id:<uuid>` — the ID of an image or generation in the project (for example,
+  one created in the Reve app). A generation ID resolves to that generation's
+  output image.
+- `reference:@<name>` — the name of a reference entity defined in the project
+  in the Reve app.
+
+### `create(instruction, *, description, references, aspect_ratio, postprocessing, version, ...)`
+
+### `edit(instruction, image, *, references, old_description, new_description, aspect_ratio, postprocessing, version, ...)`
+
+Both return a `V2ImageResponse`:
+
+| Field               | Type                  | Description                              |
+| ------------------- | --------------------- | ---------------------------------------- |
+| `image`             | `PIL.Image.Image`     | The generated image.                     |
+| `image_bytes`       | `bytes`               | Raw bytes of the generated image.        |
+| `description`       | `Description \| None` | The layout the model generated.          |
+| `request_id`        | `str \| None`         | Unique request identifier.               |
+| `credits_used`      | `int \| None`         | Credits consumed by this request.        |
+| `credits_remaining` | `int \| None`         | Credits remaining in the budget.         |
+| `version`           | `str \| None`         | Model version used.                      |
+| `content_violation` | `bool`                | Whether a content violation was flagged. |
+
 ## Postprocessing
 
 Build postprocessing pipelines with helpers from `reve.v1.postprocessing`:
@@ -242,6 +317,8 @@ Working example scripts are in the [`examples/`](examples/) directory:
 - [`create_image.py`](examples/create_image.py) — Generate images with optional postprocessing.
 - [`remix_image.py`](examples/remix_image.py) — Remix a reference image with a prompt.
 - [`edit_image.py`](examples/edit_image.py) — Edit an existing image.
+- [`v2_create_image.py`](examples/v2_create_image.py) — Generate a layout-aware image with the v2 API.
+- [`v2_edit_image.py`](examples/v2_edit_image.py) — Edit an image with the layout-aware v2 API.
 
 ## Development
 

@@ -1,5 +1,7 @@
 """Exception classes for the Reve Python SDK."""
 
+from typing import Any
+
 
 class ReveAPIError(Exception):
     """Base exception for all Reve API errors.
@@ -13,6 +15,9 @@ class ReveAPIError(Exception):
         error_code: Machine-readable error code from the API, if any.
         instance_id: Server-generated error instance ID for log correlation.
         request_id: Request ID from the x-reve-request-id header.
+        payload: The raw inner payload that triggered the error (e.g. an
+            unexpected response body fragment), kept inspectable for
+            debugging. ``None`` when not applicable.
     """
 
     _default_message: str = "API error"
@@ -22,10 +27,12 @@ class ReveAPIError(Exception):
         self,
         message: str | None = None,
         status_code: int | None = None,
+        payload: Any = None,
         **kwargs: str | None,
     ) -> None:
         self.message = message or self._default_message
         self.status_code = status_code if status_code is not None else self._default_status_code
+        self.payload = payload
         self.error_code: str | None = kwargs.get("error_code")
         self.instance_id: str | None = kwargs.get("instance_id")
         self.request_id: str | None = kwargs.get("request_id")

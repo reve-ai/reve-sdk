@@ -21,6 +21,50 @@ except ImportError:  # pragma: no cover
     _HAS_PYDANTIC = False
 
 
+def _safe_int(value: Any) -> int | None:
+    """Convert *value* to ``int`` if not ``None``."""
+    return int(value) if value is not None else None
+
+
+@classmethod  # type: ignore[misc]
+def _image_response_from_raw(
+    cls,
+    image_bytes: bytes,
+    metadata: dict | None = None,
+) -> Any:
+    """Create an ImageResponse from raw image bytes and header metadata."""
+    meta = metadata or {}
+    img = None
+    if _HAS_PIL:
+        img = PILImage.open(io.BytesIO(image_bytes))
+    return cls(
+        image=img,
+        image_bytes=image_bytes,
+        request_id=meta.get("request_id"),
+        credits_used=_safe_int(meta.get("credits_used")),
+        credits_remaining=_safe_int(meta.get("credits_remaining")),
+        version=meta.get("version"),
+        content_violation=meta.get("content_violation", False),
+    )
+
+
+def _image_response_save(self: Any, path: str, **kwargs: Any) -> None:
+    """Save the image to a file."""
+    if _HAS_PIL and self.image is not None:
+        self.image.save(path, **kwargs)
+    else:
+        with open(path, "wb") as fh:
+            fh.write(self.image_bytes)
+
+
+def _image_response_repr(self: Any) -> str:
+    if _HAS_PIL and self.image is not None:
+        w, h = self.image.size
+        return "<ImageResponse request_id={!r} size={}x{}>".format(self.request_id, w, h)
+    nbytes = len(self.image_bytes)
+    return "<ImageResponse request_id={!r} bytes={}>".format(self.request_id, nbytes)
+
+
 def _build_image_response_class() -> type:
     """Construct the ``ImageResponse`` class at import time.
 
@@ -78,49 +122,10 @@ def _build_image_response_class() -> type:
                 self.version = version
                 self.content_violation = content_violation
 
-    # -- Attach shared methods to whichever variant was chosen. --
-
-    @classmethod  # type: ignore[misc]
-    def _from_raw(
-        cls,
-        image_bytes: bytes,
-        metadata: dict | None = None,
-    ) -> _ImageResponse:
-        """Create an ImageResponse from raw image bytes and header metadata."""
-        meta = metadata or {}
-        img = None
-        if _HAS_PIL:
-            img = PILImage.open(io.BytesIO(image_bytes))
-        credits_used = meta.get("credits_used")
-        credits_remaining = meta.get("credits_remaining")
-        return cls(
-            image=img,
-            image_bytes=image_bytes,
-            request_id=meta.get("request_id"),
-            credits_used=int(credits_used) if credits_used is not None else None,
-            credits_remaining=int(credits_remaining) if credits_remaining is not None else None,
-            version=meta.get("version"),
-            content_violation=meta.get("content_violation", False),
-        )
-
-    def _save(self, path: str, **kwargs: Any) -> None:
-        """Save the image to a file."""
-        if _HAS_PIL and self.image is not None:
-            self.image.save(path, **kwargs)
-        else:
-            with open(path, "wb") as fh:
-                fh.write(self.image_bytes)
-
-    def _repr(self) -> str:
-        if _HAS_PIL and self.image is not None:
-            w, h = self.image.size
-            return "<ImageResponse request_id={!r} size={}x{}>".format(self.request_id, w, h)
-        nbytes = len(self.image_bytes)
-        return "<ImageResponse request_id={!r} bytes={}>".format(self.request_id, nbytes)
-
-    _ImageResponse.from_raw = _from_raw  # type: ignore[attr-defined]
-    _ImageResponse.save = _save  # type: ignore[attr-defined]
-    _ImageResponse.__repr__ = _repr  # type: ignore[attr-defined]
+    # -- Attach shared methods defined at module level. --
+    _ImageResponse.from_raw = _image_response_from_raw  # type: ignore[attr-defined]
+    _ImageResponse.save = _image_response_save  # type: ignore[attr-defined]
+    _ImageResponse.__repr__ = _image_response_repr  # type: ignore[attr-defined]
     _ImageResponse.__name__ = "ImageResponse"
     _ImageResponse.__qualname__ = "ImageResponse"
 

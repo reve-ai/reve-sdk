@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Increment the patch version in pyproject.toml if it hasn't been modified."""
+"""Increment the patch version in pyproject.toml and sync reve/_version.py to it."""
 
 import re
 import subprocess
@@ -7,6 +7,28 @@ import sys
 from pathlib import Path
 
 NUM_SEMVER_PIECES = 3
+
+_PYPROJECT_VERSION_RE = re.compile(r'^version\s*=\s*"([^"]+)"', re.MULTILINE)
+_MODULE_VERSION_RE = re.compile(r'^__version__\s*=\s*"([^"]+)"', re.MULTILINE)
+
+
+def replace_version(path: Path, pattern: re.Pattern[str], new_version: str) -> str:
+    """Rewrite the version captured by ``pattern`` in ``path``; return the old version."""
+    content = path.read_text()
+    match = pattern.search(content)
+    if not match:
+        print(f"Error: could not find version in {path}", file=sys.stderr)
+        sys.exit(1)
+    path.write_text(content[: match.start(1)] + new_version + content[match.end(1) :])
+    return match.group(1)
+
+
+def sync_version_module(script_dir: Path, version: str) -> None:
+    """Make reve/_version.py report the same version as pyproject.toml."""
+    version_module = script_dir / "reve" / "_version.py"
+    old_version = replace_version(version_module, _MODULE_VERSION_RE, version)
+    if old_version != version:
+        print(f"Synced {version_module.name}: {old_version} -> {version}")
 
 
 def is_dirty(filepath: Path) -> bool:
@@ -43,21 +65,20 @@ def main() -> None:
         print(f"Error: {pyproject} not found", file=sys.stderr)
         sys.exit(1)
 
-    if is_dirty(pyproject):
-        print(f"{pyproject.name} is already modified, skipping version increment.")
-        sys.exit(0)
-
-    content = pyproject.read_text()
-    match = re.search(r'^version\s*=\s*"([^"]+)"', content, re.MULTILINE)
+    match = _PYPROJECT_VERSION_RE.search(pyproject.read_text())
     if not match:
         print("Error: could not find version in pyproject.toml", file=sys.stderr)
         sys.exit(1)
+    version = match.group(1)
 
-    old_version = match.group(1)
-    new_version = increment_patch(old_version)
-    new_content = content[: match.start(1)] + new_version + content[match.end(1) :]
-    pyproject.write_text(new_content)
-    print(f"Version incremented: {old_version} -> {new_version}")
+    if is_dirty(pyproject):
+        print(f"{pyproject.name} is already modified, skipping version increment.")
+    else:
+        version = increment_patch(version)
+        replace_version(pyproject, _PYPROJECT_VERSION_RE, version)
+        print(f"Version incremented: {match.group(1)} -> {version}")
+
+    sync_version_module(script_dir, version)
 
 
 if __name__ == "__main__":

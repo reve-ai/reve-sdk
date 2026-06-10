@@ -1,9 +1,12 @@
 """Tests for reve._client module."""
 
+import re
+from pathlib import Path
+
 import pytest
 import responses
 
-from reve import ReveClient
+from reve import ReveClient, __version__
 from reve.exceptions import (
     ReveAPIError,
     ReveAuthenticationError,
@@ -74,6 +77,22 @@ class TestReveClientHeaders:
         headers = client._headers(accept="image/jpeg")
         assert headers["Accept"] == "image/jpeg"
 
+    @staticmethod
+    def test_headers_user_agent():
+        client = ReveClient(api_token="tok")
+        headers = client._headers()
+        assert re.fullmatch(r"reve-sdk/\S+ python/\d+\.\d+\.\d+", headers["User-Agent"])
+
+
+class TestVersion:
+    @staticmethod
+    def test_version_matches_pyproject():
+        """reve.__version__ is kept in sync with pyproject.toml by increment_version.py."""
+        pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
+        match = re.search(r'^version\s*=\s*"([^"]+)"', pyproject.read_text(), re.MULTILINE)
+        assert match is not None
+        assert __version__ == match.group(1)
+
 
 class TestReveClientPost:
     @staticmethod
@@ -81,12 +100,12 @@ class TestReveClientPost:
     def test_post_json():
         responses.add(
             responses.POST,
-            "https://api.reve.com/v1/image/rating/",
+            "https://api.reve.com/v1/image/rating",
             json={"ok": True},
             status=200,
         )
         client = ReveClient(api_token="tok")
-        result = client.post("/v1/image/rating/", {"request_id": "r1", "rating": 80})
+        result = client.post("/v1/image/rating", {"request_id": "r1", "rating": 80})
         assert result == {"ok": True}
 
     @staticmethod
@@ -94,13 +113,13 @@ class TestReveClientPost:
     def test_post_image():
         responses.add(
             responses.POST,
-            "https://api.reve.com/v1/image/create/",
+            "https://api.reve.com/v1/image/create",
             body=b"\xff\xd8\xff\xe0fake-jpeg",
             status=200,
             headers={"x-reve-request-id": "req-1"},
         )
         client = ReveClient(api_token="tok")
-        raw, headers = client.post("/v1/image/create/", {"prompt": "test"}, accept="image/jpeg")
+        raw, headers = client.post("/v1/image/create", {"prompt": "test"}, accept="image/jpeg")
         assert raw == b"\xff\xd8\xff\xe0fake-jpeg"
         assert headers["x-reve-request-id"] == "req-1"
 
@@ -112,13 +131,13 @@ def _mock_post_error(json_body, status, headers=None):
     """
     responses.add(
         responses.POST,
-        "https://api.reve.com/v1/test/",
+        "https://api.reve.com/v1/test",
         json=json_body,
         status=status,
         headers=headers or {},
     )
     client = ReveClient(api_token="tok")
-    client.post("/v1/test/", {})
+    client.post("/v1/test", {})
 
 
 class TestReveClientErrors:

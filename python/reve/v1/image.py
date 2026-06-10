@@ -124,7 +124,7 @@ def create(
         ReveContentViolationError: If the generated content violates policies.
     """
     body = _build_body({**options, "prompt": prompt})
-    return _post_image(client, "/v1/image/create/", body)
+    return _post_image(client, "/v1/image/create", body)
 
 
 def remix(
@@ -156,7 +156,7 @@ def remix(
     """
     body = _build_body({**options, "prompt": prompt})
     body["reference_images"] = [encode_image(img) for img in reference_images]
-    return _post_image(client, "/v1/image/remix/", body)
+    return _post_image(client, "/v1/image/remix", body)
 
 
 def edit(
@@ -184,7 +184,7 @@ def edit(
     """
     body = _build_body({**options, "edit_instruction": edit_instruction})
     body["reference_image"] = encode_image(reference_image)
-    return _post_image(client, "/v1/image/edit/", body)
+    return _post_image(client, "/v1/image/edit", body)
 
 
 def get_balance(*, client: ReveClient | None = None) -> dict[str, Any]:
@@ -200,7 +200,7 @@ def get_balance(*, client: ReveClient | None = None) -> dict[str, Any]:
         ReveAuthenticationError: If the API token is invalid (HTTP 401).
         ReveAPIError: For other API errors.
     """
-    return _resolve_client(client).get("/api/misc/balance/")
+    return _resolve_client(client).get("/api/misc/balance")
 
 
 def list_effects(
@@ -226,5 +226,5 @@ def list_effects(
     params: dict[str, str] | None = None
     if source is not None:
         params = {"source": source}
-    resp = resolved.get("/v1/image/effect/", params=params)
+    resp = resolved.get("/v1/image/effect", params=params)
     return resp.get("effects", [])
