@@ -34,7 +34,7 @@ def main():
             ),
             Region(
                 label="plate",
-                prompt="A elegant porcelain plate with two green beans placed in a cross on it seen from above",
+                prompt="An elegant porcelain plate with two green beans placed in a cross on it seen from above",
                 bbox=Bbox(x0=0.25, y0=0.4, x1=0.75, y1=0.9),
             ),
             Region(
@@ -63,7 +63,7 @@ def main():
     try:
         print("Generating a layout-aware image …")
         result = create(
-            instruction="Create an advertising photo for a restaurant, featuring two green beens crossed on an elegant white porcelain plate, flanked by antique fork and knife, crowned by a glass of frothing beer, all placed on a rustic wooden plank table.",
+            instruction="Create an advertising photo for a restaurant, featuring two green beans crossed on an elegant white porcelain plate, flanked by antique fork and knife, crowned by a glass of frothing beer, all placed on a rustic wooden plank table.",
             description=description,
             aspect_ratio="1:1",
         )
