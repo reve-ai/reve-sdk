@@ -43,50 +43,22 @@ result = create(instruction="A red dragon flying over mountains")
 result.save("dragon.jpg")
 ```
 
-Options: `description` (structured layout, see below), `references` (list of
-`Reference`), `aspect_ratio` (`"16:9"`, `"3:2"`, `"4:3"`, `"1:1"`, `"3:4"`,
-`"2:3"`, `"9:16"`, `"auto"`), `version`, `postprocessing`.
-
-### Create with a structured layout (Description)
-
-The v2 API is layout-aware. Pass a `Description` to place subjects in specific
-regions of the image:
-
-```python
-from reve.v2.image import create
-from reve.v2.types import Bbox, Description, Region
-
-description = Description(
-    prompt="An elegant place setting on a rustic wooden table.",
-    regions=[
-        Region(label="plate", prompt="A white porcelain plate", bbox=Bbox(x0=0.25, y0=0.4, x1=0.75, y1=0.9)),
-        Region(label="glass", prompt="A glass of amber beer", bbox=Bbox(x0=0.4, y0=0.1, x1=0.6, y1=0.3)),
-    ],
-)
-result = create(
-    instruction="An elegant restaurant table setting, top-down view",
-    description=description,
-    aspect_ratio="1:1",
-)
-result.save("table.jpg")
-# result.description echoes the layout the model actually generated
-```
-
-`Bbox` values are normalized `[0, 1]` with top-left origin (`x0`, `y0`, `x1`, `y1`).
+Options: `references` (list of image inputs), `aspect_ratio` (`"16:9"`,
+`"3:2"`, `"1:1"`, `"9:16"`, `"auto"`, and others — see the README for the full
+list), `version`, `postprocessing`.
 
 ### Create with reference images
 
-Pass `Reference` objects instead of inline `<ref>` tags:
+Pass reference images (each a plain image input — a file path, bytes, PIL
+Image, or `ImageInput`):
 
 ```python
 from reve.v2.image import create
-from reve.v2.types import ImageInput, Reference
+from reve.v2.types import ImageInput
 
 result = create(
     instruction="The subject in a magical forest",
-    references=[
-        Reference(image=ImageInput(data="photo.jpg"), prompt="Subject to place in the scene"),
-    ],
+    references=[ImageInput(data="photo.jpg")],
     aspect_ratio="1:1",
 )
 ```
@@ -109,16 +81,61 @@ result.save("edited.jpg")
 
 `image` accepts an `ImageInput`, file path, raw bytes, or PIL Image.
 
-Edit with layout guidance using `old_description` and `new_description`:
+Pass additional reference images (each a plain image input):
 
 ```python
 result = edit(
-    instruction="Move the plate to the left side",
+    instruction="Match the lighting of the reference",
     image="original.jpg",
-    old_description=old_layout,
-    new_description=new_layout,
+    references=["reference.jpg"],
 )
 ```
+
+### Work with layouts directly
+
+Two layout-producing functions return a `V2LayoutResponse` (a `.layout`, no
+image), letting you separate "what to draw and where" from rendering:
+
+```python
+from reve.v2.image import create_layout, image_to_layout, render
+
+# text -> layout -> image
+created = create_layout(prompt="A cozy reading nook with an armchair and a bookshelf")
+image = render(layout=created.layout)
+image.save("nook.jpg")
+
+# image -> layout
+analyzed = image_to_layout(image="nook.jpg")
+```
+
+- `create_layout(prompt, *, references?, commands?, aspect_ratio?, version?)` — text and/or references to layout.
+- `render(layout, *, references?, postprocessing?, version?)` — layout to image.
+- `image_to_layout(image, *, version?)` — image to layout.
+
+`create_layout` also accepts an ordered list of `LayoutCommand`s, appended to
+the prompt as natural-language directions. Each command's `op` is one of `add`,
+`shift`, `remove`, `place`, `keep`, or `change`; the subject is named by `label`
+or `description`; `image_index` selects an input reference image; and `at`/`to`
+positions are a `Bbox(x0, y0, x1, y1)` or a `Point(x, y)` (coordinates
+normalized to `[0, 1]`):
+
+```python
+from reve.v2.image import create_layout
+from reve.v2.types import Bbox, LayoutCommand, Point
+
+created = create_layout(
+    prompt="A desk scene",
+    commands=[
+        LayoutCommand(op="add", description="a lamp", at=Bbox(0.1, 0.1, 0.3, 0.4)),
+        LayoutCommand(op="shift", label="mug", at=Point(0.5, 0.5), to=Point(0.7, 0.6)),
+        LayoutCommand(op="change", label="book", new_description="an open notebook"),
+    ],
+)
+```
+
+`version` is optional on every v2 call: `"latest"` (the default) aliases the
+flow's current pinned version, and the version actually used is reported back as
+`response.version`.
 
 ## Postprocessing
 
@@ -141,17 +158,20 @@ result = create(
 
 ## Response Object
 
-`create()` and `edit()` return a `V2ImageResponse` with:
+`create()`, `edit()`, and `render()` return a `V2ImageResponse` with:
 
 - `image` — `PIL.Image.Image | None`
 - `image_bytes` — `bytes` (raw image data, always present)
-- `description` — `Description | None` (layout the model generated)
+- `layout` — `Layout | None` (layout the model generated)
 - `request_id` — `str | None`
 - `credits_used` — `int | None`
 - `credits_remaining` — `int | None`
 - `version` — `str | None`
 - `content_violation` — `bool`
 - `save(path, **kwargs)` — saves via PIL if available, otherwise writes raw bytes
+
+`image_to_layout()` and `create_layout()` return a `V2LayoutResponse` with the
+same fields minus `image`/`image_bytes` (and no `save`).
 
 ## Error Handling
 

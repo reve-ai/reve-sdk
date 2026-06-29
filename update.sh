@@ -2,20 +2,20 @@
 set -euo pipefail
 
 if [ -z "${REVE_SDK_DIR:-}" ]; then
-	echo "Error: REVE_SDK_DIR is not set" >&2
+	echo "Error: REVE_SDK_DIR is not set -- should point to Reve internal sdk dir" >&2
 	exit 1
 fi
-if [ ! -f "${REVE_SDK_DIR}/update.sh" ] || [ ! -d "${REVE_SDK_DIR}/skills" ]; then
+if [ ! -f "${REVE_SDK_DIR}/publish.sh" ] || [ ! -d "${REVE_SDK_DIR}/skills" ]; then
 	echo "Error: REVE_SDK_DIR does not seem to be accurate: ${REVE_SDK_DIR}"
 	exit 1
 fi
 
-SRC="$(cd "$(dirname "$0")" && pwd)"
+DST="$(cd "$(dirname "$0")" && pwd)"
 
-cd "$REVE_SDK_DIR"
+cd "$DST"
 git pull -r origin main
 
-rsync -avh "$SRC/" "$REVE_SDK_DIR/"
+rsync -avh "$REVE_SDK_DIR/" "$DST/"
 
 git add -A
 auggie --print 'Commit all the changes with a brief commit message explaining what changes the user will see. Do not focus on code, focus on a brief summary of visible changes'
