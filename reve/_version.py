@@ -8,7 +8,7 @@ or belong to a different installed distribution named ``reve``.
 """
 
 #: Kept in sync with pyproject.toml by increment_version.py.
-__version__ = "0.1.6"
+__version__ = "0.1.7"
 
 
 def get_version() -> str:

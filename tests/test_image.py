@@ -13,7 +13,7 @@ from reve import ImageResponse, ReveClient
 from reve.exceptions import ReveAPIError, ReveContentViolationError, ReveValidationError
 from reve.v1.image import create, edit, encode_image, get_balance, list_effects, remix
 from reve.v2.image import create as v2_create
-from reve.v2.image import create_layout, image_to_layout, render
+from reve.v2.image import create_layout, edit_layout, image_to_layout, render
 from reve.v2.image import edit as v2_edit
 from reve.v2.types import (
     Bbox,
@@ -270,6 +270,8 @@ def _v2_layout_json_response(content_violation=False, normalized_edit_instructio
                 "region_type": "coarse_detail",
             },
         ],
+        "width": 3072,
+        "height": 2560,
     }
     if normalized_edit_instruction is not None:
         layout["normalized_edit_instruction"] = normalized_edit_instruction
@@ -294,7 +296,7 @@ class TestV2Create:
             status=200,
         )
         result = v2_create(
-            instruction="A dog and a cat",
+            prompt="A dog and a cat",
             references=[ImageInput(data=b"fake-img")],
             aspect_ratio="1:1",
             client=_TEST_CLIENT,
@@ -309,7 +311,7 @@ class TestV2Create:
         assert result.layout.regions[0].bbox.x1 == 0.5
 
         body = json.loads(responses.calls[0].request.body)
-        assert body["instruction"] == "A dog and a cat"
+        assert body["prompt"] == "A dog and a cat"
         assert body["aspect_ratio"] == "1:1"
         assert "layout" not in body
         assert "data" in body["references"][0]
@@ -323,9 +325,9 @@ class TestV2Create:
             json=_v2_json_response(),
             status=200,
         )
-        v2_create(instruction="A sunset", client=_TEST_CLIENT)
+        v2_create(prompt="A sunset", client=_TEST_CLIENT)
         body = json.loads(responses.calls[0].request.body)
-        assert body == {"instruction": "A sunset"}
+        assert body == {"prompt": "A sunset"}
 
 
 class TestV2Edit:
@@ -339,14 +341,14 @@ class TestV2Edit:
             status=200,
         )
         result = v2_edit(
-            instruction="Make it night",
+            prompt="Make it night",
             image=b"fake-img",
             references=[b"ref-img"],
             client=_TEST_CLIENT,
         )
         assert isinstance(result, V2ImageResponse)
         body = json.loads(responses.calls[0].request.body)
-        assert body["instruction"] == "Make it night"
+        assert body["prompt"] == "Make it night"
         assert "data" in body["image"]
         assert "data" in body["references"][0]
         assert "old_layout" not in body
@@ -364,7 +366,7 @@ class TestV2ContentViolation:
             status=200,
         )
         with pytest.raises(ReveContentViolationError):
-            v2_create(instruction="bad content", client=_TEST_CLIENT)
+            v2_create(prompt="bad content", client=_TEST_CLIENT)
 
 
 class TestV2ImageInput:
@@ -428,8 +430,29 @@ class TestV2Render:
         assert result.image_bytes == _FAKE_JPEG
         body = json.loads(responses.calls[0].request.body)
         assert body["layout"]["regions"][0]["label"] == "sky"
+        assert "width" not in body["layout"]
+        assert "height" not in body["layout"]
         assert "aspect_ratio" not in body
         assert "data" in body["references"][0]["image"]
+
+    @staticmethod
+    @responses.activate
+    def test_render_sends_layout_dimensions():
+        responses.add(
+            responses.POST,
+            _BASE_URL + "/v2/image/render",
+            json=_v2_json_response(),
+            status=200,
+        )
+        layout = Layout(
+            regions=[Region(label="sky", prompt="blue sky", bbox=Bbox(0.0, 0.0, 1.0, 0.5))],
+            width=3072,
+            height=2560,
+        )
+        render(layout=layout, client=_TEST_CLIENT)
+        body = json.loads(responses.calls[0].request.body)
+        assert body["layout"]["width"] == 3072
+        assert body["layout"]["height"] == 2560
 
 
 class TestV2ImageToLayout:
@@ -446,40 +469,52 @@ class TestV2ImageToLayout:
         assert isinstance(result, V2LayoutResponse)
         assert result.layout is not None
         assert result.layout.regions[0].region_type == "coarse_detail"
+        assert result.layout.width == 3072
+        assert result.layout.height == 2560
         body = json.loads(responses.calls[0].request.body)
         assert "data" in body["image"]
         assert "aspect_ratio" not in body
 
 
-class TestV2CreateLayout:
+# create_layout and edit_layout share the same request/response shape, so
+# their basic behaviors are covered by one parametrized test each.
+_LAYOUT_ENDPOINTS = [
+    (create_layout, "/v2/image/create_layout"),
+    (edit_layout, "/v2/image/edit_layout"),
+]
+
+
+class TestV2LayoutEndpoints:
     @staticmethod
+    @pytest.mark.parametrize(("func", "path"), _LAYOUT_ENDPOINTS)
     @responses.activate
-    def test_create_layout_minimal():
+    def test_layout_minimal(func, path):
         responses.add(
             responses.POST,
-            _BASE_URL + "/v2/image/create_layout",
+            _BASE_URL + path,
             json=_v2_layout_json_response(),
             status=200,
         )
-        result = create_layout(prompt="a reading nook", client=_TEST_CLIENT)
+        result = func(prompt="a reading nook", client=_TEST_CLIENT)
         assert isinstance(result, V2LayoutResponse)
         assert result.layout is not None
         body = json.loads(responses.calls[0].request.body)
         assert body == {"prompt": "a reading nook"}
 
     @staticmethod
+    @pytest.mark.parametrize(("func", "path"), _LAYOUT_ENDPOINTS)
     @responses.activate
-    def test_create_layout_with_references():
+    def test_layout_with_references(func, path):
         responses.add(
             responses.POST,
-            _BASE_URL + "/v2/image/create_layout",
+            _BASE_URL + path,
             json=_v2_layout_json_response(),
             status=200,
         )
         layout = Layout(
             regions=[Region(label="chair", prompt="a chair", bbox=Bbox(0.1, 0.3, 0.4, 0.9))]
         )
-        result = create_layout(
+        result = func(
             prompt="a reading nook",
             references=[
                 Reference(image=ImageInput(data=b"fake-img"), prompt="ref"),
@@ -498,16 +533,18 @@ class TestV2CreateLayout:
         assert "image" not in body["references"][1]
         assert body["references"][1]["layout"]["regions"][0]["label"] == "chair"
 
+
+class TestV2EditLayout:
     @staticmethod
     @responses.activate
-    def test_create_layout_with_commands():
+    def test_edit_layout_with_commands():
         responses.add(
             responses.POST,
-            _BASE_URL + "/v2/image/create_layout",
+            _BASE_URL + "/v2/image/edit_layout",
             json=_v2_layout_json_response(),
             status=200,
         )
-        result = create_layout(
+        result = edit_layout(
             prompt="a desk scene",
             commands=[
                 LayoutCommand(op="add", description="a lamp", at=Bbox(0.1, 0.1, 0.3, 0.4)),

@@ -1,6 +1,6 @@
 """Example: Edit an image with the v2 edit API.
 
-The v2 ``edit`` function takes a base image plus a top-level instruction.
+The v2 ``edit`` function takes a base image plus a top-level prompt.
 Additional reference images can be supplied as plain image inputs (a file
 path, raw bytes, PIL Image, or ``ImageInput``).
 
@@ -38,7 +38,7 @@ def main():
     try:
         print(f"Editing image: {src_path}")
         result = edit(
-            instruction="Make the sky more dramatic with storm clouds",
+            prompt="Make the sky more dramatic with storm clouds",
             image=src_path,
             references=references,
         )

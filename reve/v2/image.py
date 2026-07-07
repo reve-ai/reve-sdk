@@ -11,8 +11,9 @@ Two families of functions are exposed:
 - **Image-producing** — :func:`create`, :func:`edit`, and :func:`render`
   return a :class:`~reve.v2.types.V2ImageResponse` (an image, plus the layout
   the model generated).
-- **Layout-producing** — :func:`image_to_layout` (image to layout) and
-  :func:`create_layout` (text and/or references to layout) return a
+- **Layout-producing** — :func:`image_to_layout` (image to layout),
+  :func:`create_layout` (text and/or references to layout), and
+  :func:`edit_layout` (layout editing with optional commands) return a
   :class:`~reve.v2.types.V2LayoutResponse` and produce no image.
 """
 
@@ -88,7 +89,7 @@ def _add_image_references(
 
 
 def _add_commands(body: dict[str, Any], commands: Sequence[LayoutCommand] | None) -> None:
-    """Serialize and attach create_layout *commands* to *body* when provided."""
+    """Serialize and attach edit_layout *commands* to *body* when provided."""
     if commands is not None:
         body["commands"] = [c.to_dict() for c in commands]
 
@@ -156,7 +157,7 @@ def _layout_result(resp: dict[str, Any]) -> V2LayoutResponse:
 
 
 def create(
-    instruction: str,
+    prompt: str,
     *,
     references: Sequence[ImageInput | RawImage] | None = None,
     aspect_ratio: AspectRatio | None = None,
@@ -164,10 +165,10 @@ def create(
     version: str | None = None,
     client: ReveClient | None = None,
 ) -> V2ImageResponse:
-    """Generate an image from a text instruction (``/v2/image/create``).
+    """Generate an image from a text prompt (``/v2/image/create``).
 
     Args:
-        instruction: Top-level free-text instruction (max 4000 characters).
+        prompt: Top-level free-text prompt (max 4000 characters).
         references: Optional reference images (at most 8), each an
             :class:`~reve.v2.types.ImageInput`, or a file path, raw bytes, or
             PIL Image.
@@ -188,14 +189,14 @@ def create(
         ReveAPIError: For API errors.
         ReveContentViolationError: If the content violates policies.
     """
-    body: dict[str, Any] = {"instruction": instruction}
+    body: dict[str, Any] = {"prompt": prompt}
     _add_image_references(body, references)
     _image_options(body, aspect_ratio=aspect_ratio, postprocessing=postprocessing, version=version)
     return _image_result(_post_json(client, "/v2/image/create", body))
 
 
 def edit(
-    instruction: str,
+    prompt: str,
     image: ImageInput | RawImage,
     *,
     references: Sequence[ImageInput | RawImage] | None = None,
@@ -204,10 +205,10 @@ def edit(
     version: str | None = None,
     client: ReveClient | None = None,
 ) -> V2ImageResponse:
-    """Edit an image using a text instruction (``/v2/image/edit``).
+    """Edit an image using a text prompt (``/v2/image/edit``).
 
     Args:
-        instruction: Top-level free-text instruction (max 4000 characters).
+        prompt: Top-level free-text prompt (max 4000 characters).
         image: Base image to edit (an :class:`~reve.v2.types.ImageInput`, or a
             file path, raw bytes, or PIL Image).
         references: Optional additional reference images (at most 8), each an
@@ -226,7 +227,7 @@ def edit(
         ReveContentViolationError: If the content violates policies.
     """
     body: dict[str, Any] = {
-        "instruction": instruction,
+        "prompt": prompt,
         "image": _coerce_image_input(image).to_dict(),
     }
     _add_image_references(body, references)
@@ -301,7 +302,6 @@ def create_layout(
     prompt: str,
     *,
     references: Sequence[Reference] | None = None,
-    commands: Sequence[LayoutCommand] | None = None,
     aspect_ratio: AspectRatio | None = None,
     version: str | None = None,
     client: ReveClient | None = None,
@@ -321,6 +321,47 @@ def create_layout(
             (max 4000 characters).
         references: Optional references (at most 8) guiding the layout, each an
             image and/or a layout.
+        aspect_ratio: Target aspect ratio for the produced layout; see
+            :data:`AspectRatio`. Defaults to ``"auto"``.
+        version: See :func:`create`.
+        client: See :func:`create`.
+
+    Returns:
+        A :class:`~reve.v2.types.V2LayoutResponse`.
+
+    Raises:
+        ReveAPIError: For API errors.
+        ReveContentViolationError: If the content violates policies.
+    """
+    body: dict[str, Any] = {"prompt": prompt}
+    _add_references(body, references)
+    _layout_options(body, aspect_ratio=aspect_ratio, version=version)
+    return _layout_result(_post_json(client, "/v2/image/create_layout", body))
+
+
+def edit_layout(
+    prompt: str,
+    *,
+    references: Sequence[Reference] | None = None,
+    commands: Sequence[LayoutCommand] | None = None,
+    aspect_ratio: AspectRatio | None = None,
+    version: str | None = None,
+    client: ReveClient | None = None,
+) -> V2LayoutResponse:
+    """Edit a layout from a prompt, references, and commands (``/v2/image/edit_layout``).
+
+    Provide the layout you are editing as a layout-only
+    :class:`~reve.v2.types.Reference`. References may also carry images. The
+    optional ``commands`` list steers the edit with imperative operations.
+
+    This endpoint returns JSON only: a layout, with no image. Use
+    :func:`render` to turn the layout into an image.
+
+    Args:
+        prompt: Free-text prompt describing the desired image
+            (max 4000 characters).
+        references: Optional references (at most 8) guiding the edited layout,
+            each an image and/or a layout.
         commands: Optional ordered list of :class:`~reve.v2.types.LayoutCommand`
             s appended to the ``prompt`` as additional natural-language
             directions (e.g. add, shift, remove, place, keep, change a subject).
@@ -340,4 +381,4 @@ def create_layout(
     _add_references(body, references)
     _add_commands(body, commands)
     _layout_options(body, aspect_ratio=aspect_ratio, version=version)
-    return _layout_result(_post_json(client, "/v2/image/create_layout", body))
+    return _layout_result(_post_json(client, "/v2/image/edit_layout", body))

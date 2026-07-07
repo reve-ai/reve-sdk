@@ -1,6 +1,6 @@
 """Example: Generate an image with the v2 create API.
 
-The v2 ``create`` function takes a top-level instruction and optional reference
+The v2 ``create`` function takes a top-level prompt and optional reference
 images, and returns an image. The response can also echo back the layout the
 model actually generated.
 
@@ -23,7 +23,7 @@ def main():
     try:
         print("Generating an image …")
         result = create(
-            instruction="Create an advertising photo for a restaurant, featuring two green beans crossed on an elegant white porcelain plate, flanked by an antique fork and knife, crowned by a glass of frothing beer, all placed on a rustic wooden plank table.",
+            prompt="Create an advertising photo for a restaurant, featuring two green beans crossed on an elegant white porcelain plate, flanked by an antique fork and knife, crowned by a glass of frothing beer, all placed on a rustic wooden plank table.",
             aspect_ratio="1:1",
         )
         result.save("v2_create.jpg")

@@ -176,11 +176,18 @@ class Layout:
             instruction. Accepted as input by :func:`~reve.v2.image.render`;
             absent on layouts produced by
             :func:`~reve.v2.image.image_to_layout`.
+        width: Pixel width of the layout's coordinate frame. Emitted by the
+            layout endpoints (always a multiple of 32). On input, ``width``
+            and ``height`` must be provided together, each a multiple of 32,
+            with ``width * height`` between ``3072*2560`` and ``4096*4096``.
+        height: Pixel height of the layout's coordinate frame. See ``width``.
     """
 
     regions: list[Region] = field(default_factory=list)
     prompt: str | None = None
     normalized_edit_instruction: str | None = None
+    width: int | None = None
+    height: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         out: dict[str, Any] = {"regions": [r.to_dict() for r in self.regions]}
@@ -188,6 +195,10 @@ class Layout:
             out["prompt"] = self.prompt
         if self.normalized_edit_instruction is not None:
             out["normalized_edit_instruction"] = self.normalized_edit_instruction
+        if self.width is not None:
+            out["width"] = self.width
+        if self.height is not None:
+            out["height"] = self.height
         return out
 
     @classmethod
@@ -197,6 +208,8 @@ class Layout:
             regions=regions,
             prompt=d.get("prompt"),
             normalized_edit_instruction=d.get("normalized_edit_instruction"),
+            width=d.get("width"),
+            height=d.get("height"),
         )
 
 
@@ -207,13 +220,15 @@ class Reference:
     Args:
         image: The reference image input. Optional: a reference may be
             layout-only (for example, when guiding
-            :func:`~reve.v2.image.create_layout` with a layout but no image).
+            :func:`~reve.v2.image.create_layout` or
+            :func:`~reve.v2.image.edit_layout` with a layout but no image).
             The image-producing endpoints (:func:`~reve.v2.image.create`,
             :func:`~reve.v2.image.edit`, :func:`~reve.v2.image.render`) expect
             an image on every reference.
         prompt: Optional natural-language prompt for the reference.
         layout: Optional layout describing the reference's own regions.
-            Consumed by :func:`~reve.v2.image.create_layout` and
+            Consumed by :func:`~reve.v2.image.create_layout`,
+            :func:`~reve.v2.image.edit_layout`, and
             :func:`~reve.v2.image.render`; ignored by
             :func:`~reve.v2.image.create` and :func:`~reve.v2.image.edit`.
     """
@@ -249,7 +264,7 @@ LayoutCommandOp = Literal["add", "shift", "remove", "place", "keep", "change"]
 
 @dataclass
 class LayoutCommand:
-    """A single imperative layout-editing command for ``create_layout``.
+    """A single imperative layout-editing command for ``edit_layout``.
 
     ``op`` selects the operation; the remaining fields are interpreted per
     ``op`` (see :data:`LayoutCommandOp`). The subject is named by either
@@ -397,7 +412,7 @@ class V2ImageResponse:
 
 @dataclass
 class V2LayoutResponse:
-    """Response from a layout-producing v2 call (image_to_layout, create_layout).
+    """Response from a layout-producing v2 call (image_to_layout, create_layout, edit_layout).
 
     These endpoints derive or transform a layout and return no image.
 

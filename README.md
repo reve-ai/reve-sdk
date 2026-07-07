@@ -166,9 +166,10 @@ Returns a list of dicts with `name`, `description`, `source`, and `category` key
 ## v2 Layout-Aware API
 
 The `reve.v2.image` module targets the `/v2/image` endpoints. The
-layout-producing endpoints (`create_layout`, `image_to_layout`, `render`) work
+layout-producing endpoints (`create_layout`, `edit_layout`, `image_to_layout`,
+`render`) work
 with a structured `Layout` (a list of labelled, bounded `Region`s); the
-image-producing `create` and `edit` endpoints take a text instruction and
+image-producing `create` and `edit` endpoints take a text prompt and
 optional reference images. Image-producing calls can also echo the layout the
 model generated.
 
@@ -180,7 +181,7 @@ from reve.v2.image import create
 from reve.v2.types import ImageInput
 
 result = create(
-    instruction="A dog on the left and a cat on the right",
+    prompt="A dog on the left and a cat on the right",
     references=[ImageInput(ref="reference:@mypet")],  # optional, each an image
     aspect_ratio="16:9",
 )
@@ -193,7 +194,7 @@ from reve.v2.image import edit
 from reve.v2.types import ImageInput
 
 result = edit(
-    instruction="Make the sky stormy",
+    prompt="Make the sky stormy",
     image="original.jpg",  # path, bytes, PIL Image, or ImageInput
     references=[ImageInput(ref="reference:@mystyle")],  # optional, each an image
 )
@@ -205,13 +206,14 @@ There are two families. **Image-producing** functions return a
 `V2ImageResponse`; **layout-producing** functions return a `V2LayoutResponse`
 and produce no image.
 
-| Function                                                                             | Kind   | Description                                     |
-| ------------------------------------------------------------------------------------ | ------ | ----------------------------------------------- |
-| `create(instruction, *, references?, aspect_ratio?, postprocessing?, version?)`      | image  | Generate an image (text + optional references). |
-| `edit(instruction, image, *, references?, aspect_ratio?, postprocessing?, version?)` | image  | Edit an image with a text instruction.          |
-| `render(layout, *, references?, postprocessing?, version?)`                          | image  | Render an image from a layout (layout2image).   |
-| `image_to_layout(image, *, version?)`                                                | layout | Derive a layout from an image (image2layout).   |
-| `create_layout(prompt, *, references?, aspect_ratio?, version?)`                     | layout | Generate a layout from text and/or references.  |
+| Function                                                                        | Kind   | Description                                        |
+| ------------------------------------------------------------------------------- | ------ | -------------------------------------------------- |
+| `create(prompt, *, references?, aspect_ratio?, postprocessing?, version?)`      | image  | Generate an image (text + optional references).    |
+| `edit(prompt, image, *, references?, aspect_ratio?, postprocessing?, version?)` | image  | Edit an image with a text prompt.                  |
+| `render(layout, *, references?, postprocessing?, version?)`                     | image  | Render an image from a layout (layout2image).      |
+| `image_to_layout(image, *, version?)`                                           | layout | Derive a layout from an image (image2layout).      |
+| `create_layout(prompt, *, references?, aspect_ratio?, version?)`                | layout | Generate a layout from text and/or references.     |
+| `edit_layout(prompt, *, references?, commands?, aspect_ratio?, version?)`       | layout | Edit a layout with text, references, and commands. |
 
 `aspect_ratio` is one of `4:1`, `3:1`, `21:9`, `2:1`, `17:9`, `16:9`, `3:2`,
 `4:3`, `1:1`, `3:4`, `2:3`, `9:16`, `1:2`, `1:3`, `1:4`, or `auto` (default).
@@ -223,8 +225,13 @@ and produce no image.
 | `ImageInput` | `data` (path/bytes/PIL, base-64 in JSON) **or** `ref` (`id:<uuid>` / `reference:@<name>`).   |
 | `Bbox`       | `x0`, `y0`, `x1`, `y1` — normalized to `[0, 1]`, top-left origin.                            |
 | `Region`     | `label`, `prompt`, `bbox`, `image_index?`, `image_region_index?`, `parent?`, `region_type?`. |
-| `Layout`     | `regions: list[Region]`, `prompt?`, `normalized_edit_instruction?`.                          |
+| `Layout`     | `regions: list[Region]`, `prompt?`, `normalized_edit_instruction?`, `width?`, `height?`.     |
 | `Reference`  | `image: ImageInput?`, `prompt?`, `layout?` — an image and/or a layout.                       |
+
+`width`/`height` are the pixel dimensions of the layout's coordinate frame.
+The layout endpoints emit them as multiples of 32; when you supply them on
+input, provide both, each a multiple of 32, with `width * height` between
+`3072*2560` and `4096*4096`.
 
 `region_type` is a level-of-detail / special-handling hint, one of:
 `coarse_detail` (a high-level object such as a person or car), `medium_detail`
@@ -256,8 +263,8 @@ project your API key belongs to:
 | `version`           | `str \| None`             | Model version used.                      |
 | `content_violation` | `bool`                    | Whether a content violation was flagged. |
 
-`image_to_layout` and `create_layout` return a `V2LayoutResponse` with the
-same fields minus `image` and `image_bytes`.
+`image_to_layout`, `create_layout`, and `edit_layout` return a
+`V2LayoutResponse` with the same fields minus `image` and `image_bytes`.
 
 ## Postprocessing
 
@@ -340,7 +347,7 @@ Working example scripts are in the [`examples/`](examples/) directory:
 - [`edit_image.py`](examples/edit_image.py) — Edit an existing image.
 - [`v2_create_image.py`](examples/v2_create_image.py) — Generate a layout-aware image with the v2 API.
 - [`v2_edit_image.py`](examples/v2_edit_image.py) — Edit an image with the layout-aware v2 API.
-- [`v2_layout_pipeline.py`](examples/v2_layout_pipeline.py) — Drive the layout endpoints end to end (`create_layout` → `render`, plus `image_to_layout`).
+- [`v2_layout_pipeline.py`](examples/v2_layout_pipeline.py) — Drive the layout endpoints end to end (`create_layout` → `edit_layout` → `render`, plus `image_to_layout`).
 
 ## Development
 

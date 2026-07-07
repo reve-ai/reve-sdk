@@ -34,12 +34,12 @@ Optional env vars: `REVE_API_HOST` (default `https://api.reve.com`),
 All image functions live in `reve.v2.image`. Types for structured layouts live
 in `reve.v2.types`.
 
-### Create an image from an instruction
+### Create an image from a prompt
 
 ```python
 from reve.v2.image import create
 
-result = create(instruction="A red dragon flying over mountains")
+result = create(prompt="A red dragon flying over mountains")
 result.save("dragon.jpg")
 ```
 
@@ -57,7 +57,7 @@ from reve.v2.image import create
 from reve.v2.types import ImageInput
 
 result = create(
-    instruction="The subject in a magical forest",
+    prompt="The subject in a magical forest",
     references=[ImageInput(data="photo.jpg")],
     aspect_ratio="1:1",
 )
@@ -73,7 +73,7 @@ result = create(
 from reve.v2.image import edit
 
 result = edit(
-    instruction="Make the sky more dramatic with storm clouds",
+    prompt="Make the sky more dramatic with storm clouds",
     image="original.jpg",
 )
 result.save("edited.jpg")
@@ -85,7 +85,7 @@ Pass additional reference images (each a plain image input):
 
 ```python
 result = edit(
-    instruction="Match the lighting of the reference",
+    prompt="Match the lighting of the reference",
     image="original.jpg",
     references=["reference.jpg"],
 )
@@ -93,7 +93,7 @@ result = edit(
 
 ### Work with layouts directly
 
-Two layout-producing functions return a `V2LayoutResponse` (a `.layout`, no
+Three layout-producing functions return a `V2LayoutResponse` (a `.layout`, no
 image), letting you separate "what to draw and where" from rendering:
 
 ```python
@@ -108,23 +108,26 @@ image.save("nook.jpg")
 analyzed = image_to_layout(image="nook.jpg")
 ```
 
-- `create_layout(prompt, *, references?, commands?, aspect_ratio?, version?)` — text and/or references to layout.
+- `create_layout(prompt, *, references?, aspect_ratio?, version?)` — text and/or references to layout.
+- `edit_layout(prompt, *, references?, commands?, aspect_ratio?, version?)` — edit a layout with text, references, and commands.
 - `render(layout, *, references?, postprocessing?, version?)` — layout to image.
 - `image_to_layout(image, *, version?)` — image to layout.
 
-`create_layout` also accepts an ordered list of `LayoutCommand`s, appended to
-the prompt as natural-language directions. Each command's `op` is one of `add`,
-`shift`, `remove`, `place`, `keep`, or `change`; the subject is named by `label`
-or `description`; `image_index` selects an input reference image; and `at`/`to`
-positions are a `Bbox(x0, y0, x1, y1)` or a `Point(x, y)` (coordinates
-normalized to `[0, 1]`):
+`edit_layout` edits an existing layout: pass the layout you are editing as a
+layout-only `Reference`. It also accepts an ordered list of `LayoutCommand`s,
+appended to the prompt as natural-language directions. Each command's `op` is
+one of `add`, `shift`, `remove`, `place`, `keep`, or `change`; the subject is
+named by `label` or `description`; `image_index` selects an input reference
+image; and `at`/`to` positions are a `Bbox(x0, y0, x1, y1)` or a `Point(x, y)`
+(coordinates normalized to `[0, 1]`):
 
 ```python
-from reve.v2.image import create_layout
-from reve.v2.types import Bbox, LayoutCommand, Point
+from reve.v2.image import edit_layout
+from reve.v2.types import Bbox, LayoutCommand, Point, Reference
 
-created = create_layout(
+edited = edit_layout(
     prompt="A desk scene",
+    references=[Reference(layout=created.layout)],
     commands=[
         LayoutCommand(op="add", description="a lamp", at=Bbox(0.1, 0.1, 0.3, 0.4)),
         LayoutCommand(op="shift", label="mug", at=Point(0.5, 0.5), to=Point(0.7, 0.6)),
@@ -132,6 +135,11 @@ created = create_layout(
     ],
 )
 ```
+
+A `Layout`'s optional `width`/`height` are the pixel dimensions of its
+coordinate frame. The layout endpoints emit them as multiples of 32; when
+supplying them on input, provide both, each a multiple of 32, with
+`width * height` between `3072*2560` and `4096*4096`.
 
 `version` is optional on every v2 call: `"latest"` (the default) aliases the
 flow's current pinned version, and the version actually used is reported back as
@@ -146,7 +154,7 @@ from reve.v2.image import create
 from reve.v1.postprocessing import upscale, remove_background, fit_image, effect
 
 result = create(
-    instruction="A cat astronaut",
+    prompt="A cat astronaut",
     postprocessing=[upscale(factor=2), remove_background()],
 )
 ```
@@ -170,8 +178,9 @@ result = create(
 - `content_violation` — `bool`
 - `save(path, **kwargs)` — saves via PIL if available, otherwise writes raw bytes
 
-`image_to_layout()` and `create_layout()` return a `V2LayoutResponse` with the
-same fields minus `image`/`image_bytes` (and no `save`).
+`image_to_layout()`, `create_layout()`, and `edit_layout()` return a
+`V2LayoutResponse` with the same fields minus `image`/`image_bytes` (and no
+`save`).
 
 ## Error Handling
 
@@ -188,7 +197,7 @@ from reve.exceptions import ReveAPIError, ReveRateLimitError
 from reve.v2.image import create
 
 try:
-    result = create(instruction="A sunset")
+    result = create(prompt="A sunset")
 except ReveRateLimitError as exc:
     print(f"Rate limited — retry after {exc.retry_after}s")
 except ReveAPIError as exc:
@@ -208,7 +217,7 @@ client = ReveClient(
     api_url="https://custom-endpoint.example.com",
     verify=False,  # disable SSL verification for local dev
 )
-result = create(instruction="A sunset", client=client)
+result = create(prompt="A sunset", client=client)
 ```
 
 ## SDK Source Location

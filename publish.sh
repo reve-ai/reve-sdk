@@ -18,4 +18,8 @@ uv run python -m build
 echo "Uploading to PyPI..."
 uv run twine upload dist/*
 
-echo "Done!"
+echo "Re-locking the integration test"
+cd ../../e2e-tests/backend/python-sdk
+uv sync
+
+echo "Done! Remember to commit these changes, and to run update.sh in reve-ai/reve-sdk"

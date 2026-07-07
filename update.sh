@@ -18,5 +18,5 @@ git pull -r origin main
 rsync -avh "$REVE_SDK_DIR/" "$DST/"
 
 git add -A
-auggie --print 'Commit all the changes with a brief commit message explaining what changes the user will see. Do not focus on code, focus on a brief summary of visible changes'
+auggie --print 'Commit all the changes with a brief commit message explaining what changes the user will see. Do not focus on code, focus on a brief summary of visible changes. If the changes are already committed, update the commit message to include the formulated message.'
 git push origin main
