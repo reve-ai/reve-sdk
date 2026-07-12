@@ -13,6 +13,7 @@ echo "Incrementing version number"
 uv run python increment_version.py
 
 echo "Building package..."
+uv pip install build twine
 uv run python -m build
 
 echo "Uploading to PyPI..."

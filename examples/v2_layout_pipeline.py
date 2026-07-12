@@ -3,10 +3,9 @@
 The layout-producing endpoints let you work with a ``Layout`` directly,
 separating "what to draw and where" from "render the pixels":
 
-  - ``create_layout``   — prompt + optional refs   -> Layout      (text/refs to layout)
-  - ``edit_layout``     — prompt + refs + commands -> Layout      (layout editing)
-  - ``render``          — Layout                   -> image       (layout2image)
-  - ``image_to_layout`` — image                    -> Layout      (image2layout)
+  - ``create_layout``  — prompt/refs/commands -> Layout
+  - ``render_layout``  — Layout + optional refs -> image
+  - ``extract_layout`` — image + optional prompt -> Layout
 
 This script: generates a layout from a text prompt, edits it with a layout
 command, renders an image from the edited layout, then derives a layout back
@@ -20,7 +19,7 @@ import os
 import sys
 
 from reve.exceptions import ReveAPIError
-from reve.v2.image import create_layout, edit_layout, image_to_layout, render
+from reve.v2.image import create_layout, extract_layout, render_layout
 from reve.v2.types import LayoutCommand, Reference
 
 
@@ -53,7 +52,7 @@ def main():
 
         # 2. layout -> layout (edit the generated layout with a command)
         print("\nEditing the layout with a command …")
-        edited = edit_layout(
+        edited = create_layout(
             prompt="Add a small side table next to the armchair.",
             references=[Reference(layout=created.layout)],
             commands=[LayoutCommand(op="add", description="a small round side table")],
@@ -64,14 +63,14 @@ def main():
 
         # 3. layout -> image (render the edited layout)
         print("\nRendering the layout into an image …")
-        rendered = render(layout=edited.layout)
+        rendered = render_layout(layout=edited.layout)
         rendered.save("v2_pipeline.jpg")
         print("Saved v2_pipeline.jpg")
         print(f"  request_id={rendered.request_id}  credits_used={rendered.credits_used}")
 
         # 4. image -> layout (derive a layout from the image we just rendered)
         print("\nDeriving a layout back from the rendered image …")
-        analyzed = image_to_layout(image="v2_pipeline.jpg")
+        analyzed = extract_layout(image="v2_pipeline.jpg")
         _print_layout("Derived layout", analyzed.layout)
 
     except ReveAPIError as exc:

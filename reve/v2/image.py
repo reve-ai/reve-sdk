@@ -1,20 +1,9 @@
 """Reve v2 layout-aware image API functions.
 
-High-level wrappers for the ``/v2/image`` endpoints. These endpoints are
-layout aware: requests and responses carry a structured
-:class:`~reve.v2.types.Layout` (a list of labelled, bounded
-:class:`~reve.v2.types.Region` s) alongside any
-:class:`~reve.v2.types.Reference` images.
-
-Two families of functions are exposed:
-
-- **Image-producing** — :func:`create`, :func:`edit`, and :func:`render`
-  return a :class:`~reve.v2.types.V2ImageResponse` (an image, plus the layout
-  the model generated).
-- **Layout-producing** — :func:`image_to_layout` (image to layout),
-  :func:`create_layout` (text and/or references to layout), and
-  :func:`edit_layout` (layout editing with optional commands) return a
-  :class:`~reve.v2.types.V2LayoutResponse` and produce no image.
+High-level wrappers for the four ``/v2/image`` endpoints: :func:`create`,
+:func:`extract_layout`, :func:`create_layout`, and :func:`render_layout`.
+Requests and responses carry structured :class:`~reve.v2.types.Layout` and
+:class:`~reve.v2.types.Reference` values where appropriate.
 """
 
 from __future__ import annotations
@@ -50,7 +39,9 @@ AspectRatio = Literal[
     "16:9",
     "3:2",
     "4:3",
+    "5:4",
     "1:1",
+    "4:5",
     "3:4",
     "2:3",
     "9:16",
@@ -83,13 +74,13 @@ def _add_references(body: dict[str, Any], references: Sequence[Reference] | None
 def _add_image_references(
     body: dict[str, Any], references: Sequence[ImageInput | RawImage] | None
 ) -> None:
-    """Serialize and attach image-only *references* (edit) to *body* when provided."""
+    """Serialize and attach image-only *references* to *body* when provided."""
     if references is not None:
         body["references"] = [_coerce_image_input(r).to_dict() for r in references]
 
 
 def _add_commands(body: dict[str, Any], commands: Sequence[LayoutCommand] | None) -> None:
-    """Serialize and attach edit_layout *commands* to *body* when provided."""
+    """Serialize and attach create_layout *commands* to *body* when provided."""
     if commands is not None:
         body["commands"] = [c.to_dict() for c in commands]
 
@@ -195,47 +186,87 @@ def create(
     return _image_result(_post_json(client, "/v2/image/create", body))
 
 
-def edit(
-    prompt: str,
+def extract_layout(
     image: ImageInput | RawImage,
     *,
-    references: Sequence[ImageInput | RawImage] | None = None,
-    aspect_ratio: AspectRatio | None = None,
-    postprocessing: Sequence[Postprocessing] | None = None,
+    prompt: str | None = None,
     version: str | None = None,
     client: ReveClient | None = None,
-) -> V2ImageResponse:
-    """Edit an image using a text prompt (``/v2/image/edit``).
+) -> V2LayoutResponse:
+    """Extract or edit a layout from one image (``/v2/image/extract_layout``).
+
+    Without a prompt, the endpoint extracts the image's current layout. With a
+    prompt, it creates an edited layout guided by the image. Both modes preserve
+    the source image's coordinate frame.
 
     Args:
-        prompt: Top-level free-text prompt (max 4000 characters).
-        image: Base image to edit (an :class:`~reve.v2.types.ImageInput`, or a
-            file path, raw bytes, or PIL Image).
-        references: Optional additional reference images (at most 8), each an
+        image: The image to derive a layout from (an
             :class:`~reve.v2.types.ImageInput`, or a file path, raw bytes, or
-            PIL Image.
-        aspect_ratio: See :func:`create`.
-        postprocessing: See :func:`create`.
+            PIL Image).
+        prompt: Optional editing instruction (max 4000 characters).
         version: See :func:`create`.
         client: See :func:`create`.
 
     Returns:
-        A :class:`~reve.v2.types.V2ImageResponse`.
+        A :class:`~reve.v2.types.V2LayoutResponse`.
 
     Raises:
         ReveAPIError: For API errors.
         ReveContentViolationError: If the content violates policies.
     """
-    body: dict[str, Any] = {
-        "prompt": prompt,
-        "image": _coerce_image_input(image).to_dict(),
-    }
-    _add_image_references(body, references)
-    _image_options(body, aspect_ratio=aspect_ratio, postprocessing=postprocessing, version=version)
-    return _image_result(_post_json(client, "/v2/image/edit", body))
+    body: dict[str, Any] = {"image": _coerce_image_input(image).to_dict()}
+    _add_optional(body, "prompt", prompt)
+    _add_optional(body, "version", version)
+    return _layout_result(_post_json(client, "/v2/image/extract_layout", body))
 
 
-def render(
+def create_layout(
+    prompt: str | None = None,
+    *,
+    references: Sequence[Reference] | None = None,
+    commands: Sequence[LayoutCommand] | None = None,
+    aspect_ratio: AspectRatio | None = None,
+    version: str | None = None,
+    client: ReveClient | None = None,
+) -> V2LayoutResponse:
+    """Generate or edit a layout (``/v2/image/create_layout``).
+
+    At least one of ``prompt`` or ``references`` is required. Prompt-only input
+    creates a layout from scratch. Any references switch to layout editing,
+    guided by their ordered image, layout, and descriptive-prompt fields.
+    Commands require at least one reference.
+
+    This endpoint returns JSON only: a layout, with no image. Use
+    :func:`render_layout` to turn the layout into an image.
+
+    Args:
+        prompt: Optional free-text prompt describing the desired image
+            (max 4000 characters).
+        references: Optional references (at most 8) guiding the layout, each an
+            image and/or a layout.
+        commands: Optional ordered layout-editing commands. Requires at least
+            one reference.
+        aspect_ratio: Target aspect ratio for the produced layout; see
+            :data:`AspectRatio`. Defaults to ``"auto"``.
+        version: See :func:`create`.
+        client: See :func:`create`.
+
+    Returns:
+        A :class:`~reve.v2.types.V2LayoutResponse`.
+
+    Raises:
+        ReveAPIError: For API errors.
+        ReveContentViolationError: If the content violates policies.
+    """
+    body: dict[str, Any] = {}
+    _add_optional(body, "prompt", prompt)
+    _add_references(body, references)
+    _add_commands(body, commands)
+    _layout_options(body, aspect_ratio=aspect_ratio, version=version)
+    return _layout_result(_post_json(client, "/v2/image/create_layout", body))
+
+
+def render_layout(
     layout: Layout,
     *,
     references: Sequence[Reference] | None = None,
@@ -243,15 +274,15 @@ def render(
     version: str | None = None,
     client: ReveClient | None = None,
 ) -> V2ImageResponse:
-    """Render an image from a layout (``/v2/image/render``; layout to image).
+    """Render an image from a layout (``/v2/image/render_layout``).
 
-    The aspect ratio of the rendered image is derived from the layout, so this
-    endpoint does not accept an ``aspect_ratio``.
+    The aspect ratio is derived from the target layout. References may contain
+    images, layouts, and descriptive prompts. Layout-only references provide
+    structural context but cannot be targeted as pixel sources.
 
     Args:
-        layout: The layout to render into an image.
-        references: Optional reference images (at most 8) whose content the
-            layout regions may refer to.
+        layout: The target layout to render.
+        references: Optional ordered references (at most 8).
         postprocessing: See :func:`create`.
         version: See :func:`create`.
         client: See :func:`create`.
@@ -268,117 +299,4 @@ def render(
     if postprocessing is not None:
         body["postprocessing"] = list(postprocessing)
     _add_optional(body, "version", version)
-    return _image_result(_post_json(client, "/v2/image/render", body))
-
-
-def image_to_layout(
-    image: ImageInput | RawImage,
-    *,
-    version: str | None = None,
-    client: ReveClient | None = None,
-) -> V2LayoutResponse:
-    """Derive a layout from a single image (``/v2/image/image_to_layout``; image to layout).
-
-    Args:
-        image: The image to derive a layout from (an
-            :class:`~reve.v2.types.ImageInput`, or a file path, raw bytes, or
-            PIL Image).
-        version: See :func:`create`.
-        client: See :func:`create`.
-
-    Returns:
-        A :class:`~reve.v2.types.V2LayoutResponse`.
-
-    Raises:
-        ReveAPIError: For API errors.
-        ReveContentViolationError: If the content violates policies.
-    """
-    body: dict[str, Any] = {"image": _coerce_image_input(image).to_dict()}
-    _add_optional(body, "version", version)
-    return _layout_result(_post_json(client, "/v2/image/image_to_layout", body))
-
-
-def create_layout(
-    prompt: str,
-    *,
-    references: Sequence[Reference] | None = None,
-    aspect_ratio: AspectRatio | None = None,
-    version: str | None = None,
-    client: ReveClient | None = None,
-) -> V2LayoutResponse:
-    """Generate a layout from a prompt and optional references (``/v2/image/create_layout``).
-
-    With only a ``prompt``, this generates a layout from scratch. When
-    ``references`` are supplied — each an image and/or a layout — it generates a
-    layout guided by them; results have the most freedom and best quality when
-    the references are images without layouts.
-
-    This endpoint returns JSON only: a layout, with no image. Use
-    :func:`render` to turn the layout into an image.
-
-    Args:
-        prompt: Free-text prompt describing the desired image
-            (max 4000 characters).
-        references: Optional references (at most 8) guiding the layout, each an
-            image and/or a layout.
-        aspect_ratio: Target aspect ratio for the produced layout; see
-            :data:`AspectRatio`. Defaults to ``"auto"``.
-        version: See :func:`create`.
-        client: See :func:`create`.
-
-    Returns:
-        A :class:`~reve.v2.types.V2LayoutResponse`.
-
-    Raises:
-        ReveAPIError: For API errors.
-        ReveContentViolationError: If the content violates policies.
-    """
-    body: dict[str, Any] = {"prompt": prompt}
-    _add_references(body, references)
-    _layout_options(body, aspect_ratio=aspect_ratio, version=version)
-    return _layout_result(_post_json(client, "/v2/image/create_layout", body))
-
-
-def edit_layout(
-    prompt: str,
-    *,
-    references: Sequence[Reference] | None = None,
-    commands: Sequence[LayoutCommand] | None = None,
-    aspect_ratio: AspectRatio | None = None,
-    version: str | None = None,
-    client: ReveClient | None = None,
-) -> V2LayoutResponse:
-    """Edit a layout from a prompt, references, and commands (``/v2/image/edit_layout``).
-
-    Provide the layout you are editing as a layout-only
-    :class:`~reve.v2.types.Reference`. References may also carry images. The
-    optional ``commands`` list steers the edit with imperative operations.
-
-    This endpoint returns JSON only: a layout, with no image. Use
-    :func:`render` to turn the layout into an image.
-
-    Args:
-        prompt: Free-text prompt describing the desired image
-            (max 4000 characters).
-        references: Optional references (at most 8) guiding the edited layout,
-            each an image and/or a layout.
-        commands: Optional ordered list of :class:`~reve.v2.types.LayoutCommand`
-            s appended to the ``prompt`` as additional natural-language
-            directions (e.g. add, shift, remove, place, keep, change a subject).
-        aspect_ratio: Target aspect ratio for the produced layout; see
-            :data:`AspectRatio`. Defaults to ``"auto"``.
-        version: See :func:`create`.
-        client: See :func:`create`.
-
-    Returns:
-        A :class:`~reve.v2.types.V2LayoutResponse`.
-
-    Raises:
-        ReveAPIError: For API errors.
-        ReveContentViolationError: If the content violates policies.
-    """
-    body: dict[str, Any] = {"prompt": prompt}
-    _add_references(body, references)
-    _add_commands(body, commands)
-    _layout_options(body, aspect_ratio=aspect_ratio, version=version)
-    return _layout_result(_post_json(client, "/v2/image/edit_layout", body))
+    return _image_result(_post_json(client, "/v2/image/render_layout", body))

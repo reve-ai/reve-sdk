@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [ -z "${REVE_SDK_DIR:-}" ]; then
-	echo "Error: REVE_SDK_DIR is not set -- should point to Reve internal sdk dir" >&2
+	echo "Error: REVE_SDK_DIR is not set -- should point to Reve internal python sdk dir" >&2
 	exit 1
 fi
 if [ ! -f "${REVE_SDK_DIR}/publish.sh" ] || [ ! -d "${REVE_SDK_DIR}/skills" ]; then

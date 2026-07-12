@@ -116,9 +116,8 @@ class Region:
         label: Short entity name. Must be unique within the layout.
         prompt: The regional prompt.
         bbox: Normalized bounding box of the region.
-        image_index: Index into the input images this region refers to. In
-            create, references are ``0..N-1``; in edit, ``0`` is the base image
-            and references are ``1..N``.
+        image_index: Index into the endpoint's ordered references. References
+            are frames ``0..N-1``.
         image_region_index: Index of the corresponding region within the
             referenced image's layout (the first region is index ``0``).
         parent: The ``label`` of this region's parent region within the same
@@ -173,9 +172,8 @@ class Layout:
         regions: The regions composing the layout.
         prompt: Overall caption/prompt for the layout.
         normalized_edit_instruction: The model's canonicalized form of an edit
-            instruction. Accepted as input by :func:`~reve.v2.image.render`;
-            absent on layouts produced by
-            :func:`~reve.v2.image.image_to_layout`.
+            instruction. Accepted by :func:`~reve.v2.image.render_layout` and
+            emitted when :func:`~reve.v2.image.create_layout` edits references.
         width: Pixel width of the layout's coordinate frame. Emitted by the
             layout endpoints (always a multiple of 32). On input, ``width``
             and ``height`` must be provided together, each a multiple of 32,
@@ -219,18 +217,12 @@ class Reference:
 
     Args:
         image: The reference image input. Optional: a reference may be
-            layout-only (for example, when guiding
-            :func:`~reve.v2.image.create_layout` or
-            :func:`~reve.v2.image.edit_layout` with a layout but no image).
-            The image-producing endpoints (:func:`~reve.v2.image.create`,
-            :func:`~reve.v2.image.edit`, :func:`~reve.v2.image.render`) expect
-            an image on every reference.
+            layout-only when guiding :func:`~reve.v2.image.create_layout` or
+            :func:`~reve.v2.image.render_layout`.
         prompt: Optional natural-language prompt for the reference.
         layout: Optional layout describing the reference's own regions.
-            Consumed by :func:`~reve.v2.image.create_layout`,
-            :func:`~reve.v2.image.edit_layout`, and
-            :func:`~reve.v2.image.render`; ignored by
-            :func:`~reve.v2.image.create` and :func:`~reve.v2.image.edit`.
+            Consumed by :func:`~reve.v2.image.create_layout` and
+            :func:`~reve.v2.image.render_layout`.
     """
 
     image: ImageInput | None = None
@@ -264,7 +256,7 @@ LayoutCommandOp = Literal["add", "shift", "remove", "place", "keep", "change"]
 
 @dataclass
 class LayoutCommand:
-    """A single imperative layout-editing command for ``edit_layout``.
+    """A single imperative layout-editing command for ``create_layout``.
 
     ``op`` selects the operation; the remaining fields are interpreted per
     ``op`` (see :data:`LayoutCommandOp`). The subject is named by either
@@ -353,7 +345,7 @@ def _parse_layout(body: dict[str, Any]) -> Layout | None:
 
 @dataclass
 class V2ImageResponse:
-    """Response from an image-producing v2 call (create, edit, render).
+    """Response from an image-producing v2 call (create or render_layout).
 
     Attributes:
         image: The generated image as a ``PIL.Image.Image`` when Pillow is
@@ -412,7 +404,7 @@ class V2ImageResponse:
 
 @dataclass
 class V2LayoutResponse:
-    """Response from a layout-producing v2 call (image_to_layout, create_layout, edit_layout).
+    """Response from a layout-producing v2 call (extract_layout or create_layout).
 
     These endpoints derive or transform a layout and return no image.
 

@@ -165,13 +165,10 @@ Returns a list of dicts with `name`, `description`, `source`, and `category` key
 
 ## v2 Layout-Aware API
 
-The `reve.v2.image` module targets the `/v2/image` endpoints. The
-layout-producing endpoints (`create_layout`, `edit_layout`, `image_to_layout`,
-`render`) work
-with a structured `Layout` (a list of labelled, bounded `Region`s); the
-image-producing `create` and `edit` endpoints take a text prompt and
-optional reference images. Image-producing calls can also echo the layout the
-model generated.
+The `reve.v2.image` module exposes four operations: `create`, `extract_layout`,
+`create_layout`, and `render_layout`. Layout operations use a structured
+`Layout` (a list of labelled, bounded `Region`s), and image-producing calls
+return the layout used for the result.
 
 Functions live in `reve.v2.image`; the data structures live in `reve.v2.types`
 (and are also re-exported from `reve.v2`).
@@ -189,14 +186,14 @@ result.save("pets.png")
 print(result.layout)  # the layout the model generated
 ```
 
-```python
-from reve.v2.image import edit
-from reve.v2.types import ImageInput
+To edit an existing image, pass it first in the ordered `references` list:
 
-result = edit(
+```python
+from reve.v2.image import create
+
+result = create(
     prompt="Make the sky stormy",
-    image="original.jpg",  # path, bytes, PIL Image, or ImageInput
-    references=[ImageInput(ref="reference:@mystyle")],  # optional, each an image
+    references=["original.jpg", "lighting-reference.jpg"],
 )
 ```
 
@@ -206,17 +203,21 @@ There are two families. **Image-producing** functions return a
 `V2ImageResponse`; **layout-producing** functions return a `V2LayoutResponse`
 and produce no image.
 
-| Function                                                                        | Kind   | Description                                        |
-| ------------------------------------------------------------------------------- | ------ | -------------------------------------------------- |
-| `create(prompt, *, references?, aspect_ratio?, postprocessing?, version?)`      | image  | Generate an image (text + optional references).    |
-| `edit(prompt, image, *, references?, aspect_ratio?, postprocessing?, version?)` | image  | Edit an image with a text prompt.                  |
-| `render(layout, *, references?, postprocessing?, version?)`                     | image  | Render an image from a layout (layout2image).      |
-| `image_to_layout(image, *, version?)`                                           | layout | Derive a layout from an image (image2layout).      |
-| `create_layout(prompt, *, references?, aspect_ratio?, version?)`                | layout | Generate a layout from text and/or references.     |
-| `edit_layout(prompt, *, references?, commands?, aspect_ratio?, version?)`       | layout | Edit a layout with text, references, and commands. |
+| Function                                                                     | Kind   | Description                                    |
+| ---------------------------------------------------------------------------- | ------ | ---------------------------------------------- |
+| `create(prompt, *, references?, aspect_ratio?, postprocessing?, version?)`   | image  | Generate or edit an image.                     |
+| `extract_layout(image, *, prompt?, version?)`                                | layout | Extract a layout, optionally applying an edit. |
+| `create_layout(prompt?, *, references?, commands?, aspect_ratio?, version?)` | layout | Generate or edit a layout.                     |
+| `render_layout(layout, *, references?, postprocessing?, version?)`           | image  | Render an image from a target layout.          |
 
 `aspect_ratio` is one of `4:1`, `3:1`, `21:9`, `2:1`, `17:9`, `16:9`, `3:2`,
-`4:3`, `1:1`, `3:4`, `2:3`, `9:16`, `1:2`, `1:3`, `1:4`, or `auto` (default).
+`4:3`, `5:4`, `1:1`, `4:5`, `3:4`, `2:3`, `9:16`, `1:2`, `1:3`, `1:4`, or
+`auto` (default).
+
+`create` accepts only ordered image references. `create_layout` and
+`render_layout` accept ordered `Reference` values containing an image, a
+layout, an optional descriptive prompt, or a supported combination. Commands
+on `create_layout` require at least one reference.
 
 ### Input types (`reve.v2.types`)
 
@@ -250,7 +251,7 @@ project your API key belongs to:
 
 ### Response types
 
-`create`, `edit`, and `render` return a `V2ImageResponse`:
+`create` and `render_layout` return a `V2ImageResponse`:
 
 | Field               | Type                      | Description                              |
 | ------------------- | ------------------------- | ---------------------------------------- |
@@ -263,7 +264,7 @@ project your API key belongs to:
 | `version`           | `str \| None`             | Model version used.                      |
 | `content_violation` | `bool`                    | Whether a content violation was flagged. |
 
-`image_to_layout`, `create_layout`, and `edit_layout` return a
+`extract_layout` and `create_layout` return a
 `V2LayoutResponse` with the same fields minus `image` and `image_bytes`.
 
 ## Postprocessing
@@ -346,8 +347,8 @@ Working example scripts are in the [`examples/`](examples/) directory:
 - [`remix_image.py`](examples/remix_image.py) — Remix a reference image with a prompt.
 - [`edit_image.py`](examples/edit_image.py) — Edit an existing image.
 - [`v2_create_image.py`](examples/v2_create_image.py) — Generate a layout-aware image with the v2 API.
-- [`v2_edit_image.py`](examples/v2_edit_image.py) — Edit an image with the layout-aware v2 API.
-- [`v2_layout_pipeline.py`](examples/v2_layout_pipeline.py) — Drive the layout endpoints end to end (`create_layout` → `edit_layout` → `render`, plus `image_to_layout`).
+- [`v2_create_with_references.py`](examples/v2_create_with_references.py) — Generate or edit from ordered image references.
+- [`v2_layout_pipeline.py`](examples/v2_layout_pipeline.py) — Drive `create_layout`, `render_layout`, and `extract_layout` end to end.
 
 ## Development
 

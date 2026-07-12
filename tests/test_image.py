@@ -1,6 +1,7 @@
 """Tests for reve.v1.image module."""
 
 import base64
+import inspect
 import io
 import json
 from typing import Any
@@ -12,9 +13,9 @@ from PIL import Image
 from reve import ImageResponse, ReveClient
 from reve.exceptions import ReveAPIError, ReveContentViolationError, ReveValidationError
 from reve.v1.image import create, edit, encode_image, get_balance, list_effects, remix
+from reve.v2 import image as v2_image
 from reve.v2.image import create as v2_create
-from reve.v2.image import create_layout, edit_layout, image_to_layout, render
-from reve.v2.image import edit as v2_edit
+from reve.v2.image import create_layout, extract_layout, render_layout
 from reve.v2.types import (
     Bbox,
     ImageInput,
@@ -256,9 +257,8 @@ def _v2_json_response(content_violation=False, image_bytes=_FAKE_JPEG):
 def _v2_layout_json_response(content_violation=False, normalized_edit_instruction=None):
     """Build a layout-producing v1_image_response-style JSON body (no image).
 
-    ``normalized_edit_instruction`` is only emitted by layout-editing responses;
-    pass it explicitly to model that response, and leave it unset for
-    ``create_layout`` and ``image_to_layout``.
+    Pass ``normalized_edit_instruction`` explicitly to model a layout-editing
+    response, and leave it unset for extraction or prompt-only layout creation.
     """
     layout: dict[str, Any] = {
         "prompt": "a reading nook",
@@ -330,29 +330,27 @@ class TestV2Create:
         assert body == {"prompt": "A sunset"}
 
 
-class TestV2Edit:
+class TestV2CreateWithReferences:
     @staticmethod
     @responses.activate
-    def test_edit_with_raw_image():
+    def test_create_preserves_reference_order():
         responses.add(
             responses.POST,
-            _BASE_URL + "/v2/image/edit",
+            _BASE_URL + "/v2/image/create",
             json=_v2_json_response(),
             status=200,
         )
-        result = v2_edit(
+        result = v2_create(
             prompt="Make it night",
-            image=b"fake-img",
-            references=[b"ref-img"],
+            references=[b"base-img", ImageInput(ref="reference:@lighting")],
             client=_TEST_CLIENT,
         )
         assert isinstance(result, V2ImageResponse)
         body = json.loads(responses.calls[0].request.body)
         assert body["prompt"] == "Make it night"
-        assert "data" in body["image"]
-        assert "data" in body["references"][0]
-        assert "old_layout" not in body
-        assert "new_layout" not in body
+        assert base64.b64decode(body["references"][0]["data"]) == b"base-img"
+        assert body["references"][1] == {"ref": "reference:@lighting"}
+        assert "image" not in body
 
 
 class TestV2ContentViolation:
@@ -408,20 +406,20 @@ class TestV2ResponseParsing:
         assert "x" * 51 not in exc_info.value.message
 
 
-class TestV2Render:
+class TestV2RenderLayout:
     @staticmethod
     @responses.activate
-    def test_render_with_layout():
+    def test_render_layout_with_references():
         responses.add(
             responses.POST,
-            _BASE_URL + "/v2/image/render",
+            _BASE_URL + "/v2/image/render_layout",
             json=_v2_json_response(),
             status=200,
         )
         layout = Layout(
             regions=[Region(label="sky", prompt="blue sky", bbox=Bbox(0.0, 0.0, 1.0, 0.5))]
         )
-        result = render(
+        result = render_layout(
             layout=layout,
             references=[Reference(image=ImageInput(data=b"fake-img"))],
             client=_TEST_CLIENT,
@@ -437,10 +435,10 @@ class TestV2Render:
 
     @staticmethod
     @responses.activate
-    def test_render_sends_layout_dimensions():
+    def test_render_layout_sends_layout_dimensions():
         responses.add(
             responses.POST,
-            _BASE_URL + "/v2/image/render",
+            _BASE_URL + "/v2/image/render_layout",
             json=_v2_json_response(),
             status=200,
         )
@@ -449,23 +447,24 @@ class TestV2Render:
             width=3072,
             height=2560,
         )
-        render(layout=layout, client=_TEST_CLIENT)
+        render_layout(layout=layout, client=_TEST_CLIENT)
         body = json.loads(responses.calls[0].request.body)
         assert body["layout"]["width"] == 3072
         assert body["layout"]["height"] == 2560
 
 
-class TestV2ImageToLayout:
+class TestV2ExtractLayout:
     @staticmethod
     @responses.activate
-    def test_image_to_layout():
+    @pytest.mark.parametrize("prompt", [None, "Remove the chair"])
+    def test_extract_layout(prompt):
         responses.add(
             responses.POST,
-            _BASE_URL + "/v2/image/image_to_layout",
+            _BASE_URL + "/v2/image/extract_layout",
             json=_v2_layout_json_response(),
             status=200,
         )
-        result = image_to_layout(image=b"fake-img", client=_TEST_CLIENT)
+        result = extract_layout(image=b"fake-img", prompt=prompt, client=_TEST_CLIENT)
         assert isinstance(result, V2LayoutResponse)
         assert result.layout is not None
         assert result.layout.regions[0].region_type == "coarse_detail"
@@ -473,79 +472,70 @@ class TestV2ImageToLayout:
         assert result.layout.height == 2560
         body = json.loads(responses.calls[0].request.body)
         assert "data" in body["image"]
+        assert body.get("prompt") == prompt
         assert "aspect_ratio" not in body
 
 
-# create_layout and edit_layout share the same request/response shape, so
-# their basic behaviors are covered by one parametrized test each.
-_LAYOUT_ENDPOINTS = [
-    (create_layout, "/v2/image/create_layout"),
-    (edit_layout, "/v2/image/edit_layout"),
-]
-
-
-class TestV2LayoutEndpoints:
+class TestV2CreateLayout:
     @staticmethod
-    @pytest.mark.parametrize(("func", "path"), _LAYOUT_ENDPOINTS)
     @responses.activate
-    def test_layout_minimal(func, path):
+    def test_create_layout_from_prompt():
         responses.add(
             responses.POST,
-            _BASE_URL + path,
+            _BASE_URL + "/v2/image/create_layout",
             json=_v2_layout_json_response(),
             status=200,
         )
-        result = func(prompt="a reading nook", client=_TEST_CLIENT)
+        result = create_layout(prompt="a reading nook", client=_TEST_CLIENT)
         assert isinstance(result, V2LayoutResponse)
         assert result.layout is not None
         body = json.loads(responses.calls[0].request.body)
         assert body == {"prompt": "a reading nook"}
 
     @staticmethod
-    @pytest.mark.parametrize(("func", "path"), _LAYOUT_ENDPOINTS)
     @responses.activate
-    def test_layout_with_references(func, path):
+    def test_create_layout_with_references_and_commands():
         responses.add(
             responses.POST,
-            _BASE_URL + path,
+            _BASE_URL + "/v2/image/create_layout",
             json=_v2_layout_json_response(),
             status=200,
         )
         layout = Layout(
             regions=[Region(label="chair", prompt="a chair", bbox=Bbox(0.1, 0.3, 0.4, 0.9))]
         )
-        result = func(
-            prompt="a reading nook",
+        result = create_layout(
             references=[
                 Reference(image=ImageInput(data=b"fake-img"), prompt="ref"),
                 Reference(layout=layout),
             ],
+            commands=[LayoutCommand(op="add", description="a lamp")],
             aspect_ratio="3:2",
             client=_TEST_CLIENT,
         )
         assert isinstance(result, V2LayoutResponse)
         body = json.loads(responses.calls[0].request.body)
-        assert body["prompt"] == "a reading nook"
+        assert "prompt" not in body
         assert body["aspect_ratio"] == "3:2"
         assert "data" in body["references"][0]["image"]
         assert body["references"][0]["prompt"] == "ref"
         # A layout-only reference carries no image.
         assert "image" not in body["references"][1]
         assert body["references"][1]["layout"]["regions"][0]["label"] == "chair"
+        assert body["commands"] == [{"op": "add", "description": "a lamp"}]
 
-
-class TestV2EditLayout:
     @staticmethod
     @responses.activate
-    def test_edit_layout_with_commands():
+    def test_create_layout_serializes_command_positions():
         responses.add(
             responses.POST,
-            _BASE_URL + "/v2/image/edit_layout",
+            _BASE_URL + "/v2/image/create_layout",
             json=_v2_layout_json_response(),
             status=200,
         )
-        result = edit_layout(
+        result = create_layout(
             prompt="a desk scene",
+            references=[Reference(layout=Layout())],
             commands=[
                 LayoutCommand(op="add", description="a lamp", at=Bbox(0.1, 0.1, 0.3, 0.4)),
                 LayoutCommand(op="shift", label="mug", at=Point(0.5, 0.5), to=Point(0.7, 0.6)),
@@ -572,6 +562,42 @@ class TestV2EditLayout:
             "label": "book",
             "new_description": "an open notebook",
         }
+
+
+class TestV2PublicFunctions:
+    @staticmethod
+    def test_exposes_only_redesigned_function_names():
+        assert list(inspect.signature(v2_image.create).parameters) == [
+            "prompt",
+            "references",
+            "aspect_ratio",
+            "postprocessing",
+            "version",
+            "client",
+        ]
+        assert list(inspect.signature(v2_image.extract_layout).parameters) == [
+            "image",
+            "prompt",
+            "version",
+            "client",
+        ]
+        assert list(inspect.signature(v2_image.create_layout).parameters) == [
+            "prompt",
+            "references",
+            "commands",
+            "aspect_ratio",
+            "version",
+            "client",
+        ]
+        assert list(inspect.signature(v2_image.render_layout).parameters) == [
+            "layout",
+            "references",
+            "postprocessing",
+            "version",
+            "client",
+        ]
+        for obsolete in ("edit", "image_to_layout", "edit_layout", "render"):
+            assert not hasattr(v2_image, obsolete)
 
 
 class TestV2LayoutResponse:
