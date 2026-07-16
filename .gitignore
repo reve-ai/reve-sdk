@@ -6,3 +6,6 @@ __pycache__/
 .pytest_cache/
 
 *.jpg
+
+# macOS metadata
+.DS_Store

@@ -1,0 +1,31 @@
+# dependencies
+/node_modules
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# local blob store (uploaded/generated images live here — never commit real user content)
+/.reve-blobs/
+
+# env files (never commit secrets; keep the documented template)
+.env*
+!.env.example
+
+# deployment state
+.vercel/
+
+# misc
+.DS_Store
+*.pem
+*.log
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# test coverage
+/coverage
