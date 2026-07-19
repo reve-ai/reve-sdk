@@ -1,5 +1,6 @@
 """Tests for reve._client module."""
 
+import json
 import re
 from pathlib import Path
 
@@ -208,7 +209,7 @@ class TestReveClientErrors:
             assert getattr(exc_info.value, attr) == expected
 
     @staticmethod
-    def test_error_str_includes_ids():
+    def test_error_str_is_json_payload():
         exc = ReveAPIError(
             message="Something broke",
             status_code=500,
@@ -216,8 +217,71 @@ class TestReveClientErrors:
             instance_id="error-test-abc",
             request_id="req-test-xyz",
         )
-        s = str(exc)
-        assert "instance_id=error-test-abc" in s
-        assert "request_id=req-test-xyz" in s
-        assert "error_code=INTERNAL" in s
-        assert "Something broke" in s
+        parsed = json.loads(str(exc))
+        assert parsed == {
+            "message": "Something broke",
+            "status_code": 500,
+            "error_code": "INTERNAL",
+            "instance_id": "error-test-abc",
+            "request_id": "req-test-xyz",
+        }
+
+    @staticmethod
+    def test_error_str_omits_none_fields():
+        exc = ReveAPIError(message="Just a message")
+        assert json.loads(str(exc)) == {"message": "Just a message"}
+
+    @staticmethod
+    def test_error_repr_is_python_dict():
+        exc = ReveAPIError(
+            message="Something broke",
+            status_code=500,
+            error_code="INTERNAL",
+        )
+        assert repr(exc) == repr(
+            {"message": "Something broke", "status_code": 500, "error_code": "INTERNAL"}
+        )
+
+    @staticmethod
+    def test_rate_limit_error_str_includes_retry_after():
+        exc = ReveRateLimitError(
+            retry_after=_RETRY_AFTER_SECONDS,
+            message="Slow down",
+            status_code=429,
+        )
+        parsed = json.loads(str(exc))
+        assert parsed["retry_after"] == _RETRY_AFTER_SECONDS
+        assert parsed["message"] == "Slow down"
+
+    @staticmethod
+    def test_error_str_includes_log_params_context_cause():
+        context = [{"error_code": "NESTED", "message": "inner failure"}]
+        exc = ReveAPIError(
+            message="Bad input",
+            status_code=400,
+            log="server-side debug detail",
+            params={"parameter_name": "aspect_ratio", "constraint": "one of 16:9, 1:1"},
+            context=context,
+            cause="upstream timeout",
+        )
+        parsed = json.loads(str(exc))
+        assert parsed["log"] == "server-side debug detail"
+        assert parsed["params"] == {
+            "parameter_name": "aspect_ratio",
+            "constraint": "one of 16:9, 1:1",
+        }
+        assert parsed["context"] == context
+        assert parsed["cause"] == "upstream timeout"
+        assert repr(exc) == repr(
+            {
+                "message": "Bad input",
+                "status_code": 400,
+                "log": "server-side debug detail",
+                "params": {
+                    "parameter_name": "aspect_ratio",
+                    "constraint": "one of 16:9, 1:1",
+                },
+                "context": context,
+                "cause": "upstream timeout",
+            }
+        )

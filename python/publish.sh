@@ -10,12 +10,17 @@ echo "Cleaning previous builds..."
 rm -rf dist/ build/ ./*.egg-info reve/*.egg-info
 
 echo "Incrementing version number"
-python increment_version.py
+uv run python increment_version.py
 
 echo "Building package..."
-python -m build
+uv pip install build twine
+uv run python -m build
 
 echo "Uploading to PyPI..."
-twine upload dist/*
+uv run twine upload dist/*
 
-echo "Done!"
+echo "Re-locking the integration test"
+cd ../../e2e-tests/backend/python-sdk
+uv sync
+
+echo "Done! Remember to commit these changes, and to run update.sh in reve-ai/reve-sdk"

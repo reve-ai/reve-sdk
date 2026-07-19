@@ -9,3 +9,9 @@ __pycache__/
 
 # macOS metadata
 .DS_Store
+node_modules
+dist
+coverage
+.rush
+rush-logs
+test-reports

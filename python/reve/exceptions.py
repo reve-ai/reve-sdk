@@ -1,5 +1,6 @@
 """Exception classes for the Reve Python SDK."""
 
+import json
 from typing import Any
 
 
@@ -15,6 +16,13 @@ class ReveAPIError(Exception):
         error_code: Machine-readable error code from the API, if any.
         instance_id: Server-generated error instance ID for log correlation.
         request_id: Request ID from the x-reve-request-id header.
+        log: Server-side debug log string, when the API returns one.
+        params: Structured, error-specific parameters from the API, when
+            present (e.g. the offending field for a validation error).
+        context: List of nested error responses the API attached for
+            additional context, when present.
+        cause: The underlying cause the API attached to the error, when
+            present.
         payload: The raw inner payload that triggered the error (e.g. an
             unexpected response body fragment), kept inspectable for
             debugging. ``None`` when not applicable.
@@ -28,7 +36,7 @@ class ReveAPIError(Exception):
         message: str | None = None,
         status_code: int | None = None,
         payload: Any = None,
-        **kwargs: str | None,
+        **kwargs: Any,
     ) -> None:
         self.message = message or self._default_message
         self.status_code = status_code if status_code is not None else self._default_status_code
@@ -36,20 +44,37 @@ class ReveAPIError(Exception):
         self.error_code: str | None = kwargs.get("error_code")
         self.instance_id: str | None = kwargs.get("instance_id")
         self.request_id: str | None = kwargs.get("request_id")
+        self.log: str | None = kwargs.get("log")
+        self.params: Any = kwargs.get("params")
+        self.context: Any = kwargs.get("context")
+        self.cause: Any = kwargs.get("cause")
         super().__init__(self.message)
 
+    def _error_payload(self) -> dict[str, Any]:
+        """Build the error payload dict, omitting keys whose value is ``None``.
+
+        Subclasses that carry extra fields (e.g. ``retry_after``) override this
+        to add them so both ``__str__`` and ``__repr__`` include them.
+        """
+        payload = {
+            "message": self.message,
+            "status_code": self.status_code,
+            "error_code": self.error_code,
+            "instance_id": self.instance_id,
+            "request_id": self.request_id,
+            "log": self.log,
+            "params": self.params,
+            "context": self.context,
+            "cause": self.cause,
+            "payload": self.payload,
+        }
+        return {k: v for k, v in payload.items() if v is not None}
+
     def __str__(self) -> str:
-        parts = []
-        if self.status_code is not None:
-            parts.append("status={}".format(self.status_code))
-        if self.error_code is not None:
-            parts.append("error_code={}".format(self.error_code))
-        if self.instance_id is not None:
-            parts.append("instance_id={}".format(self.instance_id))
-        if self.request_id is not None:
-            parts.append("request_id={}".format(self.request_id))
-        parts.append(self.message)
-        return " ".join(parts)
+        return json.dumps(self._error_payload())
+
+    def __repr__(self) -> str:
+        return repr(self._error_payload())
 
 
 class ReveAuthenticationError(ReveAPIError):
@@ -87,11 +112,11 @@ class ReveRateLimitError(ReveAPIError):
         self.retry_after = retry_after
         super().__init__(**kwargs)
 
-    def __str__(self) -> str:
-        base = super().__str__()
+    def _error_payload(self) -> dict[str, Any]:
+        payload = super()._error_payload()
         if self.retry_after is not None:
-            return "{} (retry_after={})".format(base, self.retry_after)
-        return base
+            payload["retry_after"] = self.retry_after
+        return payload
 
 
 class ReveContentViolationError(ReveAPIError):

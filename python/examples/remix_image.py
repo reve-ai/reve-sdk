@@ -1,7 +1,7 @@
 """Example: Remix images using reference images and a text prompt.
 
 Reference images are passed as file paths (or bytes / PIL Images).
-Use ``<ref>0</ref>``, ``<ref>1</ref>``, etc. in the prompt to refer
+Use ``<img>0</img>``, ``<img>1</img>``, etc. in the prompt to refer
 to each reference image by its index.
 
 Prerequisites:
@@ -32,7 +32,7 @@ def main():
     try:
         print(f"Remixing with reference image: {ref_path}")
         img = remix(
-            prompt="The subject from <ref>0</ref> standing in a magical forest",
+            prompt="The subject from <img>0</img> standing in a magical forest",
             reference_images=[ref_path],
             aspect_ratio="1:1",
         )

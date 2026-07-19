@@ -89,13 +89,13 @@ img.save("dragon.png")
 ### `remix(prompt, reference_images, *, ...)`
 
 Remix reference images into a new image guided by a prompt.
-Use `<ref>0</ref>`, `<ref>1</ref>`, … to refer to each reference image.
+Use `<img>0</img>`, `<img>1</img>`, … to refer to each reference image.
 
 ```python
 from reve.v1.image import remix
 
 img = remix(
-    prompt="The subject from <ref>0</ref> standing in a magical forest",
+    prompt="The subject from <img>0</img> standing in a magical forest",
     reference_images=["photo.jpg"],
     aspect_ratio="1:1",
 )
@@ -103,7 +103,7 @@ img = remix(
 
 | Parameter           | Type                                  | Description                                                           |
 | ------------------- | ------------------------------------- | --------------------------------------------------------------------- |
-| `prompt`            | `str`                                 | Text prompt with optional `<ref>N</ref>` tags (positional).           |
+| `prompt`            | `str`                                 | Text prompt with optional `<img>N</img>` tags (positional).           |
 | `reference_images`  | `Sequence[str \| bytes \| PIL.Image]` | Reference images — file paths, raw bytes, or PIL Images (positional). |
 | `aspect_ratio`      | `str \| None`                         | Aspect ratio (see `create`).                                          |
 | `version`           | `str \| None`                         | Model version.                                                        |
@@ -165,52 +165,80 @@ Returns a list of dicts with `name`, `description`, `source`, and `category` key
 
 ## v2 Layout-Aware API
 
-The `reve.v2` module targets the `/v2/image/create` and `/v2/image/edit`
-endpoints. Instead of embedding image references in free text, a v2 request
-carries a structured `Description` (a layout of labelled, bounded regions) and
-a list of `Reference` images. The response can also echo the layout the model
-actually generated.
+The `reve.v2.image` module exposes four operations: `create`, `extract_layout`,
+`create_layout`, and `render_layout`. Layout operations use a structured
+`Layout` (a list of labelled, bounded `Region`s), and image-producing calls
+return the layout used for the result.
+
+Functions live in `reve.v2.image`; the data structures live in `reve.v2.types`
+(and are also re-exported from `reve.v2`).
 
 ```python
-from reve.v2 import create, Bbox, Description, ImageInput, Reference, Region
+from reve.v2.image import create
+from reve.v2.types import ImageInput
 
 result = create(
-    instruction="A dog on the left and a cat on the right",
-    description=Description(
-        prompt="two pets",
-        regions=[
-            Region(label="dog", prompt="a happy dog", bbox=Bbox(0.0, 0.0, 0.5, 1.0)),
-            Region(label="cat", prompt="a sleepy cat", bbox=Bbox(0.5, 0.0, 1.0, 1.0)),
-        ],
-    ),
-    references=[Reference(image=ImageInput(ref="reference:@mypet"), prompt="my pet")],
+    prompt="A dog on the left and a cat on the right",
+    references=[ImageInput(ref="reference:@mypet")],  # optional, each an image
     aspect_ratio="16:9",
 )
 result.save("pets.png")
-print(result.description)  # the layout the model generated
+print(result.layout)  # the layout the model generated
 ```
 
-```python
-from reve.v2 import edit, Bbox, Description, Region
+To edit an existing image, pass it first in the ordered `references` list:
 
-result = edit(
-    instruction="Make the sky stormy",
-    image="original.jpg",  # path, bytes, PIL Image, or ImageInput
-    new_description=Description(
-        regions=[Region(label="sky", prompt="dark storm clouds", bbox=Bbox(0, 0, 1, 0.5))],
-    ),
+```python
+from reve.v2.image import create
+
+result = create(
+    prompt="Make the sky stormy",
+    references=["original.jpg", "lighting-reference.jpg"],
 )
 ```
 
-### Input types (`reve.v2`)
+### Functions (`reve.v2.image`)
 
-| Type          | Fields                                                                                     |
-| ------------- | ------------------------------------------------------------------------------------------ |
-| `ImageInput`  | `data` (path/bytes/PIL, base-64 in JSON) **or** `ref` (`id:<uuid>` / `reference:@<name>`). |
-| `Bbox`        | `x0`, `y0`, `x1`, `y1` — normalized to `[0, 1]`, top-left origin.                          |
-| `Region`      | `label`, `prompt`, `bbox`, `preserve?`, `image_index?`, `image_region_index?`.             |
-| `Description` | `regions: list[Region]`, `prompt?`.                                                        |
-| `Reference`   | `image: ImageInput`, `prompt?`.                                                            |
+There are two families. **Image-producing** functions return a
+`V2ImageResponse`; **layout-producing** functions return a `V2LayoutResponse`
+and produce no image.
+
+| Function                                                                     | Kind   | Description                                    |
+| ---------------------------------------------------------------------------- | ------ | ---------------------------------------------- |
+| `create(prompt, *, references?, aspect_ratio?, postprocessing?, version?)`   | image  | Generate or edit an image.                     |
+| `extract_layout(image, *, prompt?, version?)`                                | layout | Extract a layout, optionally applying an edit. |
+| `create_layout(prompt?, *, references?, commands?, aspect_ratio?, version?)` | layout | Generate or edit a layout.                     |
+| `render_layout(layout, *, references?, postprocessing?, version?)`           | image  | Render an image from a target layout.          |
+
+`aspect_ratio` is one of `4:1`, `3:1`, `21:9`, `2:1`, `17:9`, `16:9`, `3:2`,
+`4:3`, `5:4`, `1:1`, `4:5`, `3:4`, `2:3`, `9:16`, `1:2`, `1:3`, `1:4`, or
+`auto` (default).
+
+`create` accepts only ordered image references. `create_layout` and
+`render_layout` accept ordered `Reference` values containing an image, a
+layout, an optional descriptive prompt, or a supported combination. Commands
+on `create_layout` require at least one reference.
+
+### Input types (`reve.v2.types`)
+
+| Type         | Fields                                                                                       |
+| ------------ | -------------------------------------------------------------------------------------------- |
+| `ImageInput` | `data` (path/bytes/PIL, base-64 in JSON) **or** `ref` (`id:<uuid>` / `reference:@<name>`).   |
+| `Bbox`       | `x0`, `y0`, `x1`, `y1` — normalized to `[0, 1]`, top-left origin.                            |
+| `Region`     | `label`, `prompt`, `bbox`, `image_index?`, `image_region_index?`, `parent?`, `region_type?`. |
+| `Layout`     | `regions: list[Region]`, `prompt?`, `normalized_edit_instruction?`, `width?`, `height?`.     |
+| `Reference`  | `image: ImageInput?`, `prompt?`, `layout?` — an image and/or a layout.                       |
+
+`width`/`height` are the pixel dimensions of the layout's coordinate frame.
+The layout endpoints emit them as multiples of 32; when you supply them on
+input, provide both, each a multiple of 32, with `width * height` between
+`3072*2560` and `4096*4096`.
+
+`region_type` is a level-of-detail / special-handling hint, one of:
+`coarse_detail` (a high-level object such as a person or car), `medium_detail`
+(a medium-level object such as an arm or belt, whose parent is a
+`coarse_detail`), `fine_detail` (a fine detail such as a ring or buckle, whose
+parent is a `medium_detail`), `text` (embedded text), `hand`, or `face`.
 
 The `ref` form of `ImageInput` points at an image that already exists in the
 project your API key belongs to:
@@ -221,22 +249,23 @@ project your API key belongs to:
 - `reference:@<name>` — the name of a reference entity defined in the project
   in the Reve app.
 
-### `create(instruction, *, description, references, aspect_ratio, postprocessing, version, ...)`
+### Response types
 
-### `edit(instruction, image, *, references, old_description, new_description, aspect_ratio, postprocessing, version, ...)`
+`create` and `render_layout` return a `V2ImageResponse`:
 
-Both return a `V2ImageResponse`:
+| Field               | Type                      | Description                              |
+| ------------------- | ------------------------- | ---------------------------------------- |
+| `image`             | `PIL.Image.Image \| None` | The generated image.                     |
+| `image_bytes`       | `bytes`                   | Raw bytes of the generated image.        |
+| `layout`            | `Layout \| None`          | The layout the model generated.          |
+| `request_id`        | `str \| None`             | Unique request identifier.               |
+| `credits_used`      | `int \| None`             | Credits consumed by this request.        |
+| `credits_remaining` | `int \| None`             | Credits remaining in the budget.         |
+| `version`           | `str \| None`             | Model version used.                      |
+| `content_violation` | `bool`                    | Whether a content violation was flagged. |
 
-| Field               | Type                  | Description                              |
-| ------------------- | --------------------- | ---------------------------------------- |
-| `image`             | `PIL.Image.Image`     | The generated image.                     |
-| `image_bytes`       | `bytes`               | Raw bytes of the generated image.        |
-| `description`       | `Description \| None` | The layout the model generated.          |
-| `request_id`        | `str \| None`         | Unique request identifier.               |
-| `credits_used`      | `int \| None`         | Credits consumed by this request.        |
-| `credits_remaining` | `int \| None`         | Credits remaining in the budget.         |
-| `version`           | `str \| None`         | Model version used.                      |
-| `content_violation` | `bool`                | Whether a content violation was flagged. |
+`extract_layout` and `create_layout` return a
+`V2LayoutResponse` with the same fields minus `image` and `image_bytes`.
 
 ## Postprocessing
 
@@ -250,7 +279,7 @@ from reve.v1.postprocessing import upscale, remove_background, fit_image, effect
 | ---------------------------------------------------------- | --------------------------------------------------------------- |
 | `upscale(factor=2)`                                        | Upscale the image by the given factor.                          |
 | `remove_background()`                                      | Remove the background (produces transparent PNG).               |
-| `fit_image(max_width=None, max_height=None, max_dim=None)` | Constrain dimensions (pixels, 1–1024).                          |
+| `fit_image(max_width=None, max_height=None, max_dim=None)` | Constrain dimensions (pixels, 1–4096).                          |
 | `effect(name, parameters=None)`                            | Apply a named effect. Use `list_effects()` for available names. |
 
 Pass them as a list to the `postprocessing` parameter:
@@ -318,7 +347,8 @@ Working example scripts are in the [`examples/`](examples/) directory:
 - [`remix_image.py`](examples/remix_image.py) — Remix a reference image with a prompt.
 - [`edit_image.py`](examples/edit_image.py) — Edit an existing image.
 - [`v2_create_image.py`](examples/v2_create_image.py) — Generate a layout-aware image with the v2 API.
-- [`v2_edit_image.py`](examples/v2_edit_image.py) — Edit an image with the layout-aware v2 API.
+- [`v2_create_with_references.py`](examples/v2_create_with_references.py) — Generate or edit from ordered image references.
+- [`v2_layout_pipeline.py`](examples/v2_layout_pipeline.py) — Drive `create_layout`, `render_layout`, and `extract_layout` end to end.
 
 ## Development
 

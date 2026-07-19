@@ -1,27 +1,42 @@
-"""Reve API v2 module — layout-aware image create and edit.
+"""Reve API v2 module — the layout-aware image API.
 
-The v2 endpoints accept a structured :class:`~reve.v2.types.Description`
-layout and a list of :class:`~reve.v2.types.Reference` images rather than
-free-text image references. See :mod:`reve.v2.image` for the entry points.
+The v2 endpoints accept and return a structured :class:`~reve.v2.types.Layout`
+(a list of labelled, bounded :class:`~reve.v2.types.Region` s) alongside any
+:class:`~reve.v2.types.Reference` images, rather than free-text image
+references.
+
+The entry points live in :mod:`reve.v2.image` (``create``, ``extract_layout``,
+``create_layout``, and ``render_layout``); import them from there,
+e.g. ``from reve.v2.image import create``. The data structures are re-exported
+here for convenience and also live in :mod:`reve.v2.types`.
 """
 
-from .image import create, edit
 from .types import (
     Bbox,
-    Description,
+    BboxOrPoint,
     ImageInput,
+    Layout,
+    LayoutCommand,
+    LayoutCommandOp,
+    Point,
     Reference,
     Region,
+    RegionType,
     V2ImageResponse,
+    V2LayoutResponse,
 )
 
 __all__ = [
-    "create",
-    "edit",
     "Bbox",
-    "Description",
+    "BboxOrPoint",
     "ImageInput",
+    "Layout",
+    "LayoutCommand",
+    "LayoutCommandOp",
+    "Point",
     "Reference",
     "Region",
+    "RegionType",
     "V2ImageResponse",
+    "V2LayoutResponse",
 ]

@@ -85,6 +85,10 @@ class ReveClient:
             "error_code": body.get("error_code"),
             "instance_id": body.get("instance_id"),
             "request_id": response.headers.get("x-reve-request-id"),
+            "log": body.get("log"),
+            "params": body.get("params"),
+            "context": body.get("context"),
+            "cause": body.get("cause"),
         }
 
     @staticmethod
@@ -170,7 +174,7 @@ class ReveClient:
         """Send a GET request to the Reve API.
 
         Args:
-            path: API path (e.g. ``"/v1/image/balance"``).
+            path: API path (e.g. ``"/api/misc/balance"``).
             params: Optional query parameters dict.
 
         Returns:

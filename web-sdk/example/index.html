@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<title>Reve web SDK example</title>
+		<style>
+			body {
+				font-family: system-ui, sans-serif;
+				max-width: 720px;
+				margin: 2rem auto;
+				padding: 0 1rem;
+			}
+			label {
+				display: block;
+				margin: 0.75rem 0 0.25rem;
+			}
+			input:not([type="checkbox"]),
+			textarea {
+				width: 100%;
+				box-sizing: border-box;
+				font: inherit;
+			}
+			#error {
+				color: #b00020;
+				white-space: pre-wrap;
+				font-family: monospace;
+			}
+			#result reve-layout-overlay {
+				margin-top: 1rem;
+				max-width: 100%;
+			}
+			#log-section {
+				margin-top: 1.5rem;
+			}
+			#log-section h2 {
+				font-size: 1rem;
+				margin: 0 0 0.25rem;
+			}
+			#log-section .log-controls {
+				display: flex;
+				gap: 0.5rem;
+				align-items: baseline;
+				margin-bottom: 0.25rem;
+			}
+			#log {
+				font-family: monospace;
+				font-size: 0.8rem;
+				height: 10rem;
+				overflow-y: auto;
+				border: 1px solid #ccc;
+				padding: 0.4rem 0.6rem;
+				background: #fafafa;
+			}
+			#log .log-entry { margin: 0; }
+		</style>
+	</head>
+	<body>
+		<h1>Reve web SDK example</h1>
+
+		<label for="apiUrl">API base URL</label>
+		<input id="apiUrl" type="url" value="https://api.reve.com" />
+
+		<label for="token">API token</label>
+		<input id="token" type="text" placeholder="papi.…" autocomplete="off" />
+
+		<label for="prompt">Prompt</label>
+		<textarea id="prompt" rows="3">a red fox in a snowy forest</textarea>
+
+		<p><button id="render" type="button">Render</button></p>
+
+		<pre id="error" hidden></pre>
+		<div id="result"></div>
+		<p id="show-labels-row" hidden style="display:flex;align-items:center;gap:1rem;">
+			<label style="display:inline;white-space:nowrap;">
+				<input id="show-labels" type="checkbox" checked />
+				Show labels
+			</label>
+			<label for="selection-mode" style="display:inline;white-space:nowrap;">
+				Selection mode:
+				<select id="selection-mode">
+					<option value="single" selected>single</option>
+					<option value="multiple">multiple</option>
+					<option value="none">none</option>
+				</select>
+			</label>
+		</p>
+
+		<div id="log-section">
+			<div class="log-controls">
+				<h2>Event log</h2>
+				<button id="clear-log" type="button">Clear</button>
+			</div>
+			<div id="log"></div>
+		</div>
+
+		<script type="module">
+		import { ReveClient, imageResponseToObjectUrl } from "../dist/index.js";
+
+			const apiUrlInput = document.getElementById("apiUrl");
+			const tokenInput = document.getElementById("token");
+			const promptInput = document.getElementById("prompt");
+			const renderButton = document.getElementById("render");
+			const errorPre = document.getElementById("error");
+			const resultDiv = document.getElementById("result");
+			const logDiv = document.getElementById("log");
+			const clearLogButton = document.getElementById("clear-log");
+			const showLabelsCheckbox = document.getElementById("show-labels");
+			const selectionModeSelect = document.getElementById("selection-mode");
+			const showLabelsRow = document.getElementById("show-labels-row");
+
+			const REGION_EVENTS = [
+				"reve-region-hover-enter",
+				"reve-region-hover-leave",
+				"reve-region-clicked",
+				"reve-region-selected",
+				"reve-region-unselected",
+			];
+
+			for (const eventName of REGION_EVENTS) {
+				resultDiv.addEventListener(eventName, (event) => {
+					const { label, index } = event.detail;
+					const entry = document.createElement("p");
+					entry.className = "log-entry";
+					entry.textContent = `${new Date().toLocaleTimeString()} ${eventName} — label: "${label}" index: ${index}`;
+					logDiv.appendChild(entry);
+					logDiv.scrollTop = logDiv.scrollHeight;
+				});
+			}
+
+			clearLogButton.addEventListener("click", () => { logDiv.replaceChildren(); });
+
+			showLabelsCheckbox.addEventListener("change", () => {
+				const overlay = resultDiv.querySelector("reve-layout-overlay");
+				if (overlay) overlay.showLabels = showLabelsCheckbox.checked;
+			});
+
+			selectionModeSelect.addEventListener("change", () => {
+				const overlay = resultDiv.querySelector("reve-layout-overlay");
+				if (overlay) overlay.selectionMode = selectionModeSelect.value;
+			});
+
+			const STORAGE_KEY = "reve-example-form";
+			// API token is session-scoped so it is not left readable across browser
+			// sessions by scripts on the same origin.
+			const TOKEN_SESSION_KEY = "reve-example-token";
+
+			function saveFormState() {
+				sessionStorage.setItem(TOKEN_SESSION_KEY, tokenInput.value);
+				localStorage.setItem(STORAGE_KEY, JSON.stringify({
+					apiUrl: apiUrlInput.value,
+					prompt: promptInput.value,
+					showLabels: showLabelsCheckbox.checked,
+					selectionMode: selectionModeSelect.value,
+				}));
+			}
+
+			(function restoreFormState() {
+				try {
+					const savedToken = sessionStorage.getItem(TOKEN_SESSION_KEY);
+					if (savedToken !== null) tokenInput.value = savedToken;
+					const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null");
+					if (!saved) return;
+					if (saved.apiUrl !== undefined) apiUrlInput.value = saved.apiUrl;
+					if (saved.prompt !== undefined) promptInput.value = saved.prompt;
+					if (saved.showLabels !== undefined) showLabelsCheckbox.checked = saved.showLabels;
+					if (saved.selectionMode !== undefined) selectionModeSelect.value = saved.selectionMode;
+				} catch { /* ignore corrupt storage */ }
+			})();
+
+			let objectUrl = null;
+
+			renderButton.addEventListener("click", async () => {
+				errorPre.hidden = true;
+				showLabelsRow.hidden = true;
+				resultDiv.replaceChildren();
+				if (objectUrl !== null) {
+					URL.revokeObjectURL(objectUrl);
+					objectUrl = null;
+				}
+				saveFormState();
+				renderButton.disabled = true;
+				const waitEntry = document.createElement("p");
+				waitEntry.className = "log-entry";
+				waitEntry.textContent = `${new Date().toLocaleTimeString()} waiting for render`;
+				logDiv.appendChild(waitEntry);
+				logDiv.scrollTop = logDiv.scrollHeight;
+				try {
+					const client = new ReveClient({ apiToken: tokenInput.value.trim(), apiUrl: apiUrlInput.value.trim() });
+					const response = await client.createImage({ prompt: promptInput.value });
+
+					objectUrl = imageResponseToObjectUrl(response);
+					const overlay = document.createElement("reve-layout-overlay");
+					if (objectUrl !== null) {
+						overlay.src = objectUrl;
+					}
+					overlay.layout = response.layout ?? null;
+					overlay.showLabels = showLabelsCheckbox.checked;
+					overlay.selectionMode = selectionModeSelect.value;
+					resultDiv.appendChild(overlay);
+					showLabelsRow.hidden = false;
+
+					const meta = document.createElement("p");
+					meta.textContent =
+						`request ${response.request_id ?? "?"} — ` +
+						`${response.credits_used ?? "?"} credits used, ` +
+						`${response.credits_remaining ?? "?"} remaining`;
+					resultDiv.appendChild(meta);
+
+					const doneEntry = document.createElement("p");
+					doneEntry.className = "log-entry";
+					doneEntry.textContent = `${new Date().toLocaleTimeString()} render complete`;
+					logDiv.appendChild(doneEntry);
+					logDiv.scrollTop = logDiv.scrollHeight;
+				} catch (error) {
+					errorPre.hidden = false;
+					if (error?.payload !== undefined) {
+						// ReveApiError: non-2xx response with a parsed body
+						errorPre.textContent = JSON.stringify(error.payload, null, 2);
+					} else if (error instanceof TypeError) {
+						// Network failure (CORS, SSL, connection refused, …).
+						// Browsers do not expose the specific error code (e.g.
+						// net::ERR_SSL_PROTOCOL_ERROR) to JavaScript; open
+						// DevTools → Console or Network tab for the full detail.
+						const lines = [`${error.name}: ${error.message}`];
+						if (error.cause != null) lines.push(`cause: ${error.cause}`);
+						lines.push("(see browser DevTools for the specific network error code)");
+						errorPre.textContent = lines.join("\n");
+					} else {
+						errorPre.textContent = String(error);
+					}
+				} finally {
+					renderButton.disabled = false;
+				}
+			});
+		</script>
+	</body>
+</html>

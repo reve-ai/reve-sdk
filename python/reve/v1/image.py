@@ -136,8 +136,8 @@ def remix(
 ) -> ImageResponse:
     """Generate a new image by remixing reference images with a text prompt.
 
-    Reference images can be referred to in the prompt using ``<ref>0</ref>``,
-    ``<ref>1</ref>``, etc.
+    Reference images can be referred to in the prompt using ``<img>0</img>``,
+    ``<img>1</img>``, etc.
 
     Args:
         prompt: Text prompt describing the desired output.
