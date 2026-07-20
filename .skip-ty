@@ -1,3 +1,0 @@
-# Presence of this file opts this project out of the ty type check in
-# s/per-project-lint.sh. Remove this file once the project's ty errors are
-# addressed.
