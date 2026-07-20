@@ -34,6 +34,7 @@ export type {
 	V2Point,
 	V2PostprocessCost,
 	V2Postprocessing,
+	V2ReconcileLayoutsRequest,
 	V2Reference,
 	V2Region,
 	V2RegionType,

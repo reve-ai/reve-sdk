@@ -6,7 +6,7 @@ The v2 endpoints accept and return a structured :class:`~reve.v2.types.Layout`
 references.
 
 The entry points live in :mod:`reve.v2.image` (``create``, ``extract_layout``,
-``create_layout``, and ``render_layout``); import them from there,
+``create_layout``, ``render_layout``, and ``reconcile_layout``); import them from there,
 e.g. ``from reve.v2.image import create``. The data structures are re-exported
 here for convenience and also live in :mod:`reve.v2.types`.
 """

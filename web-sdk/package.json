@@ -1,6 +1,6 @@
 {
 	"name": "@reve-ai/web-sdk",
-	"version": "0.1.1",
+	"version": "0.1.2",
 	"description": "Reve partner API v2 client and layout overlay web component",
 	"license": "MIT",
 	"author": "Reve AI authors",

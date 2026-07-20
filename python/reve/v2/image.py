@@ -1,7 +1,8 @@
 """Reve v2 layout-aware image API functions.
 
-High-level wrappers for the four ``/v2/image`` endpoints: :func:`create`,
-:func:`extract_layout`, :func:`create_layout`, and :func:`render_layout`.
+High-level wrappers for the five ``/v2/image`` endpoints: :func:`create`,
+:func:`extract_layout`, :func:`create_layout`, :func:`render_layout`, and
+:func:`reconcile_layout`.
 Requests and responses carry structured :class:`~reve.v2.types.Layout` and
 :class:`~reve.v2.types.Reference` values where appropriate.
 """
@@ -300,3 +301,37 @@ def render_layout(
         body["postprocessing"] = list(postprocessing)
     _add_optional(body, "version", version)
     return _image_result(_post_json(client, "/v2/image/render_layout", body))
+
+
+def reconcile_layout(
+    original_layout: Layout,
+    edited_layout: Layout,
+    *,
+    version: str | None = None,
+    client: ReveClient | None = None,
+) -> V2LayoutResponse:
+    """Reconcile a directly edited layout against its original (``/v2/image/reconcile_layouts``).
+
+    Structural changes are reconciled against the original layout, while
+    prompt and color edits are harmonized. The endpoint returns the reconciled
+    layout without rendering an image.
+
+    Args:
+        original_layout: The layout from which the edits started.
+        edited_layout: The layout after direct client or user edits.
+        version: See :func:`create`.
+        client: See :func:`create`.
+
+    Returns:
+        A :class:`~reve.v2.types.V2LayoutResponse`.
+
+    Raises:
+        ReveAPIError: For API errors.
+        ReveContentViolationError: If the content violates policies.
+    """
+    body: dict[str, Any] = {
+        "original_layout": original_layout.to_dict(),
+        "edited_layout": edited_layout.to_dict(),
+    }
+    _add_optional(body, "version", version)
+    return _layout_result(_post_json(client, "/v2/image/reconcile_layouts", body))

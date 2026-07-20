@@ -138,16 +138,29 @@ overlay.src = imageResponseToObjectUrl(created);
 overlay.layout = created.layout;
 ```
 
-The four endpoint wrappers all take the exported request body types
+The five endpoint wrappers all take the exported request body types
 (`V2ImageCreateRequest`, `V2ExtractLayoutRequest`, …) and return a
 `V2ImageResponse`:
 
-| Method                          | Endpoint                   | Produces       |
-| ------------------------------- | -------------------------- | -------------- |
-| `client.createImage(request)`   | `/v2/image/create`         | image + layout |
-| `client.extractLayout(request)` | `/v2/image/extract_layout` | layout only    |
-| `client.createLayout(request)`  | `/v2/image/create_layout`  | layout only    |
-| `client.renderLayout(request)`  | `/v2/image/render_layout`  | image + layout |
+| Method                             | Endpoint                      | Produces       |
+| ---------------------------------- | ----------------------------- | -------------- |
+| `client.createImage(request)`      | `/v2/image/create`            | image + layout |
+| `client.extractLayout(request)`    | `/v2/image/extract_layout`    | layout only    |
+| `client.createLayout(request)`     | `/v2/image/create_layout`     | layout only    |
+| `client.renderLayout(request)`     | `/v2/image/render_layout`     | image + layout |
+| `client.reconcileLayouts(request)` | `/v2/image/reconcile_layouts` | layout only    |
+
+To reconcile all parts of a layout that has direct edits, and generate a
+coherent scene description, send the old layout and the edited layout to
+`reconcileLayouts`:
+
+```js
+const reconciled = await client.reconcileLayouts({
+  original_layout: originalLayout,
+  edited_layout: editedLayout,
+});
+console.log(reconciled.layout);
+```
 
 ### Postprocessors and effects
 

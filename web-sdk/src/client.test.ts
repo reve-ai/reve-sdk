@@ -80,14 +80,21 @@ describe("ReveClient", () => {
 				path: "/v2/image/extract_layout",
 			},
 			{
-				call: (client: ReveClient): Promise<V2ImageResponse> =>
-					client.createLayout({ instruction: "add a dog" }),
+				call: (client: ReveClient): Promise<V2ImageResponse> => client.createLayout({ prompt: "add a dog" }),
 				path: "/v2/image/create_layout",
 			},
 			{
 				call: (client: ReveClient): Promise<V2ImageResponse> =>
 					client.renderLayout({ layout: { regions: [] } }),
 				path: "/v2/image/render_layout",
+			},
+			{
+				call: (client: ReveClient): Promise<V2ImageResponse> =>
+					client.reconcileLayouts({
+						original_layout: { regions: [] },
+						edited_layout: { regions: [], prompt: "add a dog" },
+					}),
+				path: "/v2/image/reconcile_layouts",
 			},
 		];
 		for (const { call, path } of cases) {

@@ -31,8 +31,9 @@ Optional env vars: `REVE_API_HOST` (default `https://api.reve.com`),
 
 ## Core Functions
 
-The four functions in `reve.v2.image` are `create`, `extract_layout`,
-`create_layout`, and `render_layout`. Structured types live in `reve.v2.types`.
+The five functions in `reve.v2.image` are `create`, `extract_layout`,
+`create_layout`, `render_layout`, and `reconcile_layout`. Structured types live in
+`reve.v2.types`.
 
 ### Create an image from a prompt
 
@@ -101,6 +102,7 @@ analyzed = extract_layout(image="nook.jpg", prompt="Remove the bookshelf")
 - `extract_layout(image, *, prompt?, version?)` — one image to a layout, optionally edited by a prompt.
 - `create_layout(prompt?, *, references?, commands?, aspect_ratio?, version?)` — prompt and/or mixed references to a layout.
 - `render_layout(layout, *, references?, postprocessing?, version?)` — target layout and optional mixed references to an image.
+- `reconcile_layout(original_layout, edited_layout, *, version?)` — reconcile direct edits against their original layout.
 
 `create_layout` requires at least a prompt or one reference. Each ordered
 `Reference` may contain an `image`, a `layout`, an optional descriptive
@@ -125,6 +127,17 @@ edited = create_layout(
 For `render_layout`, image-bearing references provide pixel context and their
 optional layouts identify source regions. Layout-only references provide
 structural context and cannot be targeted as pixel sources.
+
+Use `reconcile_layout` after a client directly edits a layout, especially when
+a user or agent changes its prompt or regions. This keeps all parts of the
+scene semantically consistent and prevents `render_layout` from seeing
+inconsistent or contradictory scene descriptions:
+
+```python
+from reve.v2.image import reconcile_layout
+
+reconciled = reconcile_layout(original_layout, edited_layout)
+```
 
 A `Layout`'s optional `width`/`height` are the pixel dimensions of its
 coordinate frame. The layout endpoints emit them as multiples of 32; when

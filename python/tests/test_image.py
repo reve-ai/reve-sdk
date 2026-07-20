@@ -15,7 +15,7 @@ from reve.exceptions import ReveAPIError, ReveContentViolationError, ReveValidat
 from reve.v1.image import create, edit, encode_image, get_balance, list_effects, remix
 from reve.v2 import image as v2_image
 from reve.v2.image import create as v2_create
-from reve.v2.image import create_layout, extract_layout, render_layout
+from reve.v2.image import create_layout, extract_layout, reconcile_layout, render_layout
 from reve.v2.types import (
     Bbox,
     ImageInput,
@@ -564,6 +564,37 @@ class TestV2CreateLayout:
         }
 
 
+class TestV2ReconcileLayout:
+    @staticmethod
+    @responses.activate
+    def test_reconcile_layout_sends_original_and_edited_layouts():
+        responses.add(
+            responses.POST,
+            _BASE_URL + "/v2/image/reconcile_layouts",
+            json=_v2_layout_json_response(),
+            status=200,
+        )
+        original = Layout(
+            regions=[Region(label="chair", prompt="an armchair", bbox=Bbox(0.1, 0.3, 0.4, 0.9))]
+        )
+        edited = Layout(
+            regions=[Region(label="chair", prompt="a blue armchair", bbox=Bbox(0.2, 0.3, 0.5, 0.9))]
+        )
+
+        result = reconcile_layout(original, edited, version="latest", client=_TEST_CLIENT)
+
+        assert isinstance(result, V2LayoutResponse)
+        body = json.loads(responses.calls[0].request.body)
+        assert body["original_layout"]["regions"][0]["prompt"] == "an armchair"
+        assert body["edited_layout"]["regions"][0]["bbox"] == {
+            "x0": 0.2,
+            "y0": 0.3,
+            "x1": 0.5,
+            "y1": 0.9,
+        }
+        assert body["version"] == "latest"
+
+
 class TestV2PublicFunctions:
     @staticmethod
     def test_exposes_only_redesigned_function_names():
@@ -593,6 +624,12 @@ class TestV2PublicFunctions:
             "layout",
             "references",
             "postprocessing",
+            "version",
+            "client",
+        ]
+        assert list(inspect.signature(v2_image.reconcile_layout).parameters) == [
+            "original_layout",
+            "edited_layout",
             "version",
             "client",
         ]

@@ -165,8 +165,8 @@ Returns a list of dicts with `name`, `description`, `source`, and `category` key
 
 ## v2 Layout-Aware API
 
-The `reve.v2.image` module exposes four operations: `create`, `extract_layout`,
-`create_layout`, and `render_layout`. Layout operations use a structured
+The `reve.v2.image` module exposes five operations: `create`, `extract_layout`,
+`create_layout`, `render_layout`, and `reconcile_layout`. Layout operations use a structured
 `Layout` (a list of labelled, bounded `Region`s), and image-producing calls
 return the layout used for the result.
 
@@ -203,12 +203,13 @@ There are two families. **Image-producing** functions return a
 `V2ImageResponse`; **layout-producing** functions return a `V2LayoutResponse`
 and produce no image.
 
-| Function                                                                     | Kind   | Description                                    |
-| ---------------------------------------------------------------------------- | ------ | ---------------------------------------------- |
-| `create(prompt, *, references?, aspect_ratio?, postprocessing?, version?)`   | image  | Generate or edit an image.                     |
-| `extract_layout(image, *, prompt?, version?)`                                | layout | Extract a layout, optionally applying an edit. |
-| `create_layout(prompt?, *, references?, commands?, aspect_ratio?, version?)` | layout | Generate or edit a layout.                     |
-| `render_layout(layout, *, references?, postprocessing?, version?)`           | image  | Render an image from a target layout.          |
+| Function                                                                     | Kind   | Description                                        |
+| ---------------------------------------------------------------------------- | ------ | -------------------------------------------------- |
+| `create(prompt, *, references?, aspect_ratio?, postprocessing?, version?)`   | image  | Generate or edit an image.                         |
+| `extract_layout(image, *, prompt?, version?)`                                | layout | Extract a layout, optionally applying an edit.     |
+| `create_layout(prompt?, *, references?, commands?, aspect_ratio?, version?)` | layout | Generate or edit a layout.                         |
+| `render_layout(layout, *, references?, postprocessing?, version?)`           | image  | Render an image from a target layout.              |
+| `reconcile_layout(original_layout, edited_layout, *, version?)`              | layout | Reconcile direct edits against an original layout. |
 
 `aspect_ratio` is one of `4:1`, `3:1`, `21:9`, `2:1`, `17:9`, `16:9`, `3:2`,
 `4:3`, `5:4`, `1:1`, `4:5`, `3:4`, `2:3`, `9:16`, `1:2`, `1:3`, `1:4`, or
@@ -218,6 +219,17 @@ and produce no image.
 `render_layout` accept ordered `Reference` values containing an image, a
 layout, an optional descriptive prompt, or a supported combination. Commands
 on `create_layout` require at least one reference.
+
+To preserve the intent of direct layout edits while allowing the model to
+harmonize structural, prompt, and color changes, reconcile the edited layout
+against the layout it came from:
+
+```python
+from reve.v2.image import reconcile_layout
+
+reconciled = reconcile_layout(original_layout, edited_layout)
+print(reconciled.layout)
+```
 
 ### Input types (`reve.v2.types`)
 

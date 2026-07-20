@@ -152,6 +152,13 @@ export interface V2RenderLayoutRequest {
 	version?: string;
 }
 
+/** Request body for POST /v2/image/reconcile_layouts. */
+export interface V2ReconcileLayoutsRequest {
+	original_layout: V2Layout;
+	edited_layout: V2Layout;
+	version?: string;
+}
+
 /** Source filter for the effects-listing endpoint. */
 export type V1EffectSource = "all" | "project" | "preset";
 
@@ -169,7 +176,7 @@ export interface V1EffectsResponse {
 }
 
 /** The publicly billable /v2/image operations. */
-export type V2Operation = "create" | "extract_layout" | "create_layout" | "render_layout";
+export type V2Operation = "create" | "extract_layout" | "create_layout" | "render_layout" | "reconcile_layouts";
 
 /** The available postprocessing processes. */
 export type V2ImageProcess = "upscale" | "remove_background" | "fit_image" | "effect";

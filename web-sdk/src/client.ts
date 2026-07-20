@@ -14,6 +14,7 @@ import type {
 	V2ImageInfoResponse,
 	V2ImageResponse,
 	V2PostprocessCost,
+	V2ReconcileLayoutsRequest,
 	V2RenderLayoutRequest,
 } from "./types.js";
 
@@ -73,6 +74,11 @@ export class ReveClient {
 	/** Render an image from a layout (`POST /v2/image/render_layout`). */
 	async renderLayout(request: V2RenderLayoutRequest): Promise<V2ImageResponse> {
 		return await this.post("/v2/image/render_layout", request);
+	}
+
+	/** Reconcile a directly edited layout against its original (`POST /v2/image/reconcile_layouts`). */
+	async reconcileLayouts(request: V2ReconcileLayoutsRequest): Promise<V2ImageResponse> {
+		return await this.post("/v2/image/reconcile_layouts", request);
 	}
 
 	/**
