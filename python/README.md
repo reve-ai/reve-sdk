@@ -1,6 +1,6 @@
 # Reve Python SDK
 
-A Pythonic interface to the [Reve](https://reve.art) image-generation API.
+A Pythonic interface to the [Reve](https://reve.com) image-generation API.
 Generate, remix, and edit images with a handful of function calls.
 
 ## Installation
